@@ -113,7 +113,8 @@ configure_env() {
     info "Generando hash de contraseña para el panel admin..."
     info "Instalando dependencias npm locales (necesario para generar el hash)..."
     npm install --prefix "$PROJECT_DIR" --silent 2>/dev/null \
-        || npm install --prefix "$PROJECT_DIR" 2>&1 | tail -3
+        || npm install --prefix "$PROJECT_DIR" 2>&1 | tail -3 \
+        || true  # npm puede emitir error de logs pero aun así instalar correctamente
 
     local ADMIN_PASS ADMIN_PASS2
     while true; do
@@ -185,9 +186,13 @@ deploy_server() {
     ok "Archivos copiados a $INSTALL_DIR"
 
     info "Instalando dependencias npm (producción)..."
-    sudo -u "$SERVICE_USER" HOME="$INSTALL_DIR" \
+    # Asegurar que el directorio .npm existe y tiene permisos correctos
+    mkdir -p "$INSTALL_DIR/.npm"
+    chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR/.npm"
+    # Usar 'env' para garantizar que HOME llega correctamente al proceso npm
+    sudo -u "$SERVICE_USER" env HOME="$INSTALL_DIR" \
         npm install --production --prefix "$INSTALL_DIR" --silent \
-        || sudo -u "$SERVICE_USER" HOME="$INSTALL_DIR" \
+        || sudo -u "$SERVICE_USER" env HOME="$INSTALL_DIR" \
         npm install --production --prefix "$INSTALL_DIR" 2>&1 | tail -5
     ok "npm install completado"
 
@@ -516,7 +521,7 @@ main() {
             ;;
         5)
             deploy_server
-            systemctl restart print-server
+            setup_systemd
             ok "Servidor actualizado y reiniciado."
             ;;
         6)
