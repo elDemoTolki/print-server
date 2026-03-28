@@ -45,7 +45,7 @@ Permitir que el alumno ingrese más información junto con la foto.
 
 ---
 
-## 4. Filtro por mes
+## ~~4. Filtro por mes~~ ✅ Implementado
 
 Agregar un selector de mes en la galería y en el panel admin para filtrar las fotos por período.
 

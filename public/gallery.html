@@ -209,6 +209,9 @@
           <option value="3 Medio E">3 Medio E</option>
           <option value="3 Medio F">3 Medio F</option>
         </select>
+        <select id="filter-mes">
+          <option value="">Todos los meses</option>
+        </select>
         <button class="filter-clear" id="filter-clear">✕ Limpiar</button>
       </div>
 
@@ -240,11 +243,37 @@
     const countBadge  = document.getElementById('count-badge');
     const filterAlumno = document.getElementById('filter-alumno');
     const filterCurso  = document.getElementById('filter-curso');
+    const filterMes    = document.getElementById('filter-mes');
     const filterClear  = document.getElementById('filter-clear');
 
     let allJobs      = [];   // all jobs from server
     let filteredJobs = [];   // currently visible (after filter)
     let lbIndex      = 0;    // current lightbox index in filteredJobs
+
+    // ── Mes helpers ───────────────────────────
+    const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                   'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+    function monthKey(dateStr) {
+      const d = new Date(dateStr);
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    }
+    function monthLabel(key) {
+      const [y, m] = key.split('-');
+      return `${MESES[parseInt(m,10)-1]} ${y}`;
+    }
+    function buildMonthSelect() {
+      const current = filterMes.value;
+      const keys = [...new Set(allJobs.map(j => monthKey(j.uploaded_at)))].sort().reverse();
+      filterMes.innerHTML = '<option value="">Todos los meses</option>';
+      keys.forEach(k => {
+        const opt = document.createElement('option');
+        opt.value = k;
+        opt.textContent = monthLabel(k);
+        filterMes.appendChild(opt);
+      });
+      if (keys.includes(current)) filterMes.value = current;
+    }
 
     // ── Helpers ──────────────────────────────
     function escHtml(str) {
@@ -256,7 +285,7 @@
     function updateCount() {
       const total    = allJobs.length;
       const filtered = filteredJobs.length;
-      const isFiltering = filterAlumno.value.trim() || filterCurso.value;
+      const isFiltering = filterAlumno.value.trim() || filterCurso.value || filterMes.value;
       countBadge.textContent = isFiltering
         ? `${filtered} de ${total} fotos`
         : (total === 1 ? '1 foto' : `${total} fotos`);
@@ -264,12 +293,14 @@
 
     // ── Filters ───────────────────────────────
     function getFiltered() {
-      const q    = filterAlumno.value.trim().toLowerCase();
-      const cur  = filterCurso.value;
+      const q   = filterAlumno.value.trim().toLowerCase();
+      const cur = filterCurso.value;
+      const mes = filterMes.value;
       return allJobs.filter(j => {
         const ma = !q   || j.alumno.toLowerCase().includes(q);
         const mc = !cur || j.curso === cur;
-        return ma && mc;
+        const mm = !mes || monthKey(j.uploaded_at) === mes;
+        return ma && mc && mm;
       });
     }
 
@@ -280,10 +311,12 @@
     }
 
     filterAlumno.addEventListener('input',  applyFilters);
-    filterCurso.addEventListener('change', applyFilters);
+    filterCurso.addEventListener('change',  applyFilters);
+    filterMes.addEventListener('change',    applyFilters);
     filterClear.addEventListener('click', () => {
       filterAlumno.value = '';
       filterCurso.value  = '';
+      filterMes.value    = '';
       applyFilters();
     });
 
@@ -319,6 +352,7 @@
     function addJob(job, prepend = false) {
       if (prepend) allJobs.unshift(job);
       else         allJobs.push(job);
+      buildMonthSelect();
       applyFilters();
 
       if (prepend) {
@@ -336,6 +370,7 @@
     function removeJob(id) {
       allJobs = allJobs.filter(j => j.id !== id);
       if (lightbox.classList.contains('open')) closeLightbox();
+      buildMonthSelect();
       applyFilters();
     }
 
@@ -345,6 +380,7 @@
         const res  = await fetch('/api/jobs');
         const jobs = await res.json();
         allJobs = Array.isArray(jobs) ? jobs : [];
+        buildMonthSelect();
         applyFilters();
       } catch {
         emptyState.querySelector('p').textContent = 'Error cargando la galería.';

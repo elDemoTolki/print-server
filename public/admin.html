@@ -126,6 +126,9 @@
           <option value="3 Medio E">3 Medio E</option>
           <option value="3 Medio F">3 Medio F</option>
         </select>
+        <select id="filter-mes">
+          <option value="">Todos los meses</option>
+        </select>
         <span class="filter-count" id="filter-count"></span>
       </div>
 
@@ -187,9 +190,35 @@
     const logoutBtn  = document.getElementById('logout-btn');
     const filterAlumno = document.getElementById('filter-alumno');
     const filterCurso  = document.getElementById('filter-curso');
+    const filterMes    = document.getElementById('filter-mes');
     const filterCount  = document.getElementById('filter-count');
 
     let allJobs = [];
+
+    // ── Mes helpers ───────────────────────────
+    const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                   'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+    function monthKey(dateStr) {
+      const d = new Date(dateStr);
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    }
+    function monthLabel(key) {
+      const [y, m] = key.split('-');
+      return `${MESES[parseInt(m,10)-1]} ${y}`;
+    }
+    function buildMonthSelect() {
+      const current = filterMes.value;
+      const keys = [...new Set(allJobs.map(j => monthKey(j.uploaded_at)))].sort().reverse();
+      filterMes.innerHTML = '<option value="">Todos los meses</option>';
+      keys.forEach(k => {
+        const opt = document.createElement('option');
+        opt.value = k;
+        opt.textContent = monthLabel(k);
+        filterMes.appendChild(opt);
+      });
+      if (keys.includes(current)) filterMes.value = current;
+    }
 
     // ── Helpers ──────────────────────────────
     function escHtml(str) {
@@ -213,10 +242,12 @@
     function getFiltered() {
       const q     = filterAlumno.value.trim().toLowerCase();
       const curso = filterCurso.value;
+      const mes   = filterMes.value;
       return allJobs.filter(j => {
         const matchAlumno = !q     || j.alumno.toLowerCase().includes(q);
         const matchCurso  = !curso || j.curso === curso;
-        return matchAlumno && matchCurso;
+        const matchMes    = !mes   || monthKey(j.uploaded_at) === mes;
+        return matchAlumno && matchCurso && matchMes;
       });
     }
 
@@ -225,7 +256,8 @@
     }
 
     filterAlumno.addEventListener('input',  applyFilters);
-    filterCurso.addEventListener('change', applyFilters);
+    filterCurso.addEventListener('change',  applyFilters);
+    filterMes.addEventListener('change',    applyFilters);
 
     // ── Print ────────────────────────────────
     async function printJob(id, btn) {
@@ -360,6 +392,7 @@
       try {
         const res  = await fetch('/admin/api/jobs');
         allJobs = await res.json();
+        buildMonthSelect();
         applyFilters();
       } catch (err) {
         console.error(err);
