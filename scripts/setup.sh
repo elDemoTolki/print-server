@@ -175,6 +175,7 @@ deploy_server() {
     if command -v rsync &>/dev/null; then
         rsync -a --delete \
             --exclude=node_modules --exclude='.git' --exclude='*.log' \
+            --exclude='.npm' \
             "$PROJECT_DIR/" "$INSTALL_DIR/"
     else
         find "$PROJECT_DIR" -mindepth 1 -maxdepth 1 \
@@ -186,6 +187,8 @@ deploy_server() {
     ok "Archivos copiados a $INSTALL_DIR"
 
     info "Instalando dependencias npm (producción)..."
+    # Limpiar node_modules previo para evitar errores ENOTEMPTY
+    rm -rf "$INSTALL_DIR/node_modules"
     # Asegurar que el directorio .npm existe y tiene permisos correctos
     mkdir -p "$INSTALL_DIR/.npm"
     chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR/.npm"
@@ -335,15 +338,17 @@ setup_wifi_ap() {
 
     # ── Netplan: IP estática en la interfaz WiFi ──────────────────────────────
     local NETPLAN_FILE="/etc/netplan/99-print-server-ap.yaml"
+    # Usar 'ethernets' en vez de 'wifis': en modo AP hostapd controla
+    # la interfaz WiFi directamente, netplan solo asigna la IP estática.
+    # La sección 'wifis' requiere access-points definidos (modo cliente).
     cat > "$NETPLAN_FILE" <<NPEOF
 network:
   version: 2
-  wifis:
+  ethernets:
     ${WIFI_IFACE}:
       dhcp4: false
       addresses:
         - ${WIFI_IP}/${WIFI_MASK}
-      access-points: {}
 NPEOF
     chmod 600 "$NETPLAN_FILE"
     netplan apply 2>/dev/null || netplan apply
