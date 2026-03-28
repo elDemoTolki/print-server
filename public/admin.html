@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="/css/app.css" />
   <style>
     .admin-header {
-      padding: 24px 0 20px;
+      padding: 24px 0 16px;
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
@@ -21,6 +21,12 @@
       gap: 10px;
       flex-wrap: wrap;
     }
+    .greeting {
+      font-size: 0.8rem;
+      color: var(--muted-2);
+      margin-top: 2px;
+    }
+    .greeting strong { color: var(--accent); font-weight: 700; }
     .admin-body { padding-bottom: 48px; }
     .card-overflow { overflow-x: auto; }
     .print-count {
@@ -32,6 +38,55 @@
     }
     .print-count strong { color: var(--text); }
     .job-date { font-size: 0.78rem; color: var(--muted-2); }
+
+    /* Filters */
+    .filters {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .filters input,
+    .filters select {
+      max-width: 200px;
+      width: auto;
+      flex: 1;
+      min-width: 130px;
+      padding: 9px 14px;
+      font-size: 0.875rem;
+    }
+    .filters select { padding-right: 36px; }
+    .filter-count {
+      font-size: 0.8rem;
+      color: var(--muted-2);
+      align-self: center;
+      white-space: nowrap;
+    }
+
+    /* Delete button */
+    .btn-delete {
+      background: transparent;
+      border: 1px solid rgba(239,68,68,0.3);
+      color: var(--red);
+      padding: 6px 12px;
+      min-height: unset;
+      height: 34px;
+      width: auto;
+      border-radius: var(--radius-sm);
+      font-size: 0.8rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all var(--trans);
+      font-family: inherit;
+      white-space: nowrap;
+    }
+    .btn-delete:hover:not(:disabled) {
+      background: rgba(239,68,68,0.12);
+      border-color: var(--red);
+    }
+    .btn-delete:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .actions-cell { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
   </style>
 </head>
 <body class="page">
@@ -39,14 +94,15 @@
   <div class="container">
     <header class="admin-header">
       <div>
-        <p style="font-size:0.72rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Panel de control</p>
+        <p style="font-size:0.72rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);margin-bottom:2px">Panel de control</p>
         <h1 class="title" style="font-size:clamp(1.4rem,4vw,2rem)">Impresión</h1>
+        <p class="greeting">Hola, <strong>Nicol Valencia C.</strong> 👋</p>
         <div class="admin-meta">
           <span class="sse-pill" id="sse-pill">
             <span class="dot dot-warn" id="sse-dot"></span>
             <span id="sse-label">Conectando…</span>
           </span>
-          <span class="count-badge" id="count-badge" style="display:inline-block;background:var(--surface-2);border:1px solid var(--border);color:var(--muted-2);font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:100px">—</span>
+          <span id="count-badge" style="display:inline-block;background:var(--surface-2);border:1px solid var(--border);color:var(--muted-2);font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:100px">—</span>
         </div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;padding-top:4px">
@@ -56,6 +112,21 @@
     </header>
 
     <main class="admin-body">
+
+      <!-- Filters -->
+      <div class="filters">
+        <input type="text" id="filter-alumno" placeholder="Buscar alumno…" />
+        <select id="filter-curso">
+          <option value="">Todos los cursos</option>
+          <option value="3 Medio A">3 Medio A</option>
+          <option value="3 Medio B">3 Medio B</option>
+          <option value="3 Medio C">3 Medio C</option>
+          <option value="3 Medio D">3 Medio D</option>
+          <option value="3 Medio E">3 Medio E</option>
+          <option value="3 Medio F">3 Medio F</option>
+        </select>
+        <span class="filter-count" id="filter-count"></span>
+      </div>
 
       <!-- Desktop: table -->
       <div class="admin-desktop card card-overflow">
@@ -68,14 +139,14 @@
               <th>Subido</th>
               <th>Estado</th>
               <th>Impresiones</th>
-              <th>Acción</th>
+              <th>Acciones</th>
             </tr>
           </thead>
           <tbody id="jobs-table-body"></tbody>
         </table>
         <div id="table-empty" class="empty-state hidden">
           <div class="icon">🖨️</div>
-          <p>No hay trabajos todavía.</p>
+          <p>Sin resultados.</p>
         </div>
       </div>
 
@@ -84,7 +155,7 @@
         <div class="job-card-wrap" id="jobs-cards"></div>
         <div id="cards-empty" class="empty-state hidden">
           <div class="icon">🖨️</div>
-          <p>No hay trabajos todavía.</p>
+          <p>Sin resultados.</p>
         </div>
       </div>
 
@@ -100,26 +171,49 @@
     const sseLabel   = document.getElementById('sse-label');
     const countBadge = document.getElementById('count-badge');
     const logoutBtn  = document.getElementById('logout-btn');
+    const filterAlumno = document.getElementById('filter-alumno');
+    const filterCurso  = document.getElementById('filter-curso');
+    const filterCount  = document.getElementById('filter-count');
 
+    let allJobs = [];
+
+    // ── Helpers ──────────────────────────────
     function escHtml(str) {
       return String(str)
         .replace(/&/g,'&amp;').replace(/</g,'&lt;')
         .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
-
     function fmtDate(str) {
       return new Date(str).toLocaleString('es-CL', {
         day:'2-digit', month:'2-digit', year:'2-digit',
         hour:'2-digit', minute:'2-digit'
       });
     }
-
     function badgeHtml(status) {
       return status === 'printed'
         ? '<span class="badge badge-printed">Impreso</span>'
         : '<span class="badge badge-pending">Pendiente</span>';
     }
 
+    // ── Filter ────────────────────────────────
+    function getFiltered() {
+      const q     = filterAlumno.value.trim().toLowerCase();
+      const curso = filterCurso.value;
+      return allJobs.filter(j => {
+        const matchAlumno = !q     || j.alumno.toLowerCase().includes(q);
+        const matchCurso  = !curso || j.curso === curso;
+        return matchAlumno && matchCurso;
+      });
+    }
+
+    function applyFilters() {
+      renderJobs(getFiltered());
+    }
+
+    filterAlumno.addEventListener('input',  applyFilters);
+    filterCurso.addEventListener('change', applyFilters);
+
+    // ── Print ────────────────────────────────
     async function printJob(id, btn) {
       btn.disabled = true;
       const orig = btn.textContent;
@@ -137,26 +231,56 @@
       }
     }
 
+    // ── Delete ───────────────────────────────
+    async function deleteJob(id, alumno, btn) {
+      if (!confirm(`¿Eliminar la foto de ${alumno}?\n\nEsta acción no se puede deshacer.`)) return;
+      btn.disabled = true;
+      btn.textContent = 'Eliminando…';
+      try {
+        const res  = await fetch(`/admin/jobs/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (!data.success) {
+          alert(data.error || 'Error al eliminar.');
+          btn.disabled = false;
+          btn.textContent = '🗑 Eliminar';
+        } else {
+          loadJobs();
+        }
+      } catch {
+        alert('Error de conexión con el servidor.');
+        btn.disabled = false;
+        btn.textContent = '🗑 Eliminar';
+      }
+    }
+
+    // ── Render ────────────────────────────────
     function renderJobs(jobs) {
       tableBody.innerHTML = '';
       cardsWrap.innerHTML = '';
 
+      const total    = allJobs.length;
+      const filtered = jobs.length;
+      const isFiltering = filterAlumno.value.trim() || filterCurso.value;
+
+      countBadge.textContent = total === 1 ? '1 trabajo' : `${total} trabajos`;
+      filterCount.textContent = isFiltering
+        ? `${filtered} de ${total}`
+        : '';
+
       if (!jobs.length) {
         tableEmpty.classList.remove('hidden');
         cardsEmpty.classList.remove('hidden');
-        countBadge.textContent = '0 trabajos';
         return;
       }
-
       tableEmpty.classList.add('hidden');
       cardsEmpty.classList.add('hidden');
-      countBadge.textContent = jobs.length === 1 ? '1 trabajo' : `${jobs.length} trabajos`;
 
       jobs.forEach((job) => {
         const thumb = `/uploads/${escHtml(job.filename)}`;
 
         // ── Table row (desktop) ──
         const tr = document.createElement('tr');
+        tr.dataset.id = job.id;
         tr.innerHTML = `
           <td><img class="thumb" src="${thumb}" alt="${escHtml(job.alumno)}" loading="lazy" /></td>
           <td class="text-muted">${job.id}</td>
@@ -166,17 +290,26 @@
           </td>
           <td class="job-date">${fmtDate(job.uploaded_at)}</td>
           <td>${badgeHtml(job.status)}</td>
-          <td class="print-count"><strong>${job.print_count}</strong> vez</td>
-          <td><button class="btn btn-print" data-id="${job.id}">🖨 Imprimir</button></td>
+          <td class="print-count"><strong>${job.print_count}</strong>×</td>
+          <td>
+            <div class="actions-cell">
+              <button class="btn btn-print" data-action="print">🖨 Imprimir</button>
+              <button class="btn-delete" data-action="delete">🗑 Eliminar</button>
+            </div>
+          </td>
         `;
-        tr.querySelector('[data-id]').addEventListener('click', function() {
+        tr.querySelector('[data-action="print"]').addEventListener('click', function() {
           printJob(job.id, this);
+        });
+        tr.querySelector('[data-action="delete"]').addEventListener('click', function() {
+          deleteJob(job.id, job.alumno, this);
         });
         tableBody.appendChild(tr);
 
         // ── Mobile card ──
         const card = document.createElement('div');
         card.className = 'job-card fade-up';
+        card.dataset.id = job.id;
         card.innerHTML = `
           <img class="thumb" src="${thumb}" alt="${escHtml(job.alumno)}" loading="lazy" />
           <div class="info" style="flex:1;min-width:0">
@@ -185,22 +318,29 @@
             <div class="card-footer">
               ${badgeHtml(job.status)}
               <span class="print-count"><strong>${job.print_count}</strong>×</span>
-              <button class="btn btn-print" style="margin-left:auto" data-id="${job.id}">🖨 Imprimir</button>
+            </div>
+            <div style="display:flex;gap:6px;margin-top:8px">
+              <button class="btn btn-print" data-action="print" style="flex:1">🖨 Imprimir</button>
+              <button class="btn-delete" data-action="delete">🗑</button>
             </div>
           </div>
         `;
-        card.querySelector('[data-id]').addEventListener('click', function() {
+        card.querySelector('[data-action="print"]').addEventListener('click', function() {
           printJob(job.id, this);
+        });
+        card.querySelector('[data-action="delete"]').addEventListener('click', function() {
+          deleteJob(job.id, job.alumno, this);
         });
         cardsWrap.appendChild(card);
       });
     }
 
+    // ── Load ──────────────────────────────────
     async function loadJobs() {
       try {
         const res  = await fetch('/admin/api/jobs');
-        const jobs = await res.json();
-        renderJobs(jobs);
+        allJobs = await res.json();
+        applyFilters();
       } catch (err) {
         console.error(err);
       }
@@ -213,15 +353,9 @@
       sseDot.className = 'dot dot-ok';
       sseLabel.textContent = 'Conectado';
     });
-
-    es.addEventListener('new-photo', () => {
-      loadJobs();
-    });
-
-    es.addEventListener('print-update', () => {
-      loadJobs();
-    });
-
+    es.addEventListener('new-photo',    () => loadJobs());
+    es.addEventListener('print-update', () => loadJobs());
+    es.addEventListener('delete-photo', () => loadJobs());
     es.onerror = () => {
       sseDot.className = 'dot dot-warn';
       sseLabel.textContent = 'Reconectando…';

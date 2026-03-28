@@ -54,6 +54,11 @@ function getAdminJobs() {
   }));
 }
 
+function deleteJob(id) {
+  db.prepare('DELETE FROM print_log WHERE job_id = ?').run(id);
+  db.prepare('DELETE FROM jobs WHERE id = ?').run(id);
+}
+
 module.exports = {
   getAllJobs,
   getJobById,
@@ -64,4 +69,5 @@ module.exports = {
   getPrintHistory,
   getGalleryJobs,
   getAdminJobs,
+  deleteJob,
 };

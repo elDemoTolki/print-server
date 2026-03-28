@@ -1,10 +1,12 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const bcrypt = require('bcrypt');
 const config = require('../config');
 const db = require('../db/database');
 const { requireAdmin } = require('../middleware/auth');
 const printRouter = require('./print');
+const { broadcast } = require('./events');
 
 const router = express.Router();
 
@@ -48,6 +50,23 @@ router.get('/', requireAdmin, (req, res) => {
 router.get('/api/jobs', requireAdmin, (req, res) => {
   const jobs = db.getAdminJobs();
   res.json(jobs);
+});
+
+router.delete('/jobs/:id', requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  const job = db.getJobById(id);
+  if (!job) return res.status(404).json({ success: false, error: 'Trabajo no encontrado.' });
+
+  const filePath = path.join(config.uploadDir, job.filename);
+  try {
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  } catch (err) {
+    console.error('Error eliminando archivo:', err);
+  }
+
+  db.deleteJob(id);
+  broadcast('delete-photo', { id });
+  return res.json({ success: true });
 });
 
 router.use('/print', printRouter);
