@@ -420,6 +420,9 @@ DMEOF
     # ── Habilitar e iniciar servicios ─────────────────────────────────────────
     systemctl unmask hostapd --quiet 2>/dev/null || true
     systemctl enable hostapd dnsmasq --quiet
+    # Matar cualquier proceso dnsmasq suelto antes de iniciar el servicio
+    pkill -x dnsmasq 2>/dev/null || true
+    sleep 1
     systemctl restart hostapd dnsmasq
     sleep 2
 
