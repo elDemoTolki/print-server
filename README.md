@@ -31,13 +31,16 @@ print-server/
 │   ├── css/
 │   │   ├── tailwind.min.css
 │   │   └── app.css
+│   ├── js/
+│   │   └── theme.js
 │   ├── uploads/
 │   ├── index.html
 │   ├── gallery.html
 │   ├── admin-login.html
 │   └── admin.html
 ├── scripts/
-│   └── generate-password.js
+│   ├── generate-password.js
+│   └── setup.sh
 ├── package.json
 └── .env.example
 ```
@@ -141,14 +144,45 @@ winget install Git.Git
 
 ---
 
-## Instalación de dependencias
+## Instalación automatizada (recomendado)
+
+El script `scripts/setup.sh` automatiza toda la instalación en Linux:
+
+```bash
+sudo bash scripts/setup.sh
+```
+
+Opciones del menú:
+
+| Opción | Descripción |
+|--------|-------------|
+| `[1]` | Instalación completa (deps + servidor + WiFi AP) |
+| `[2]` | Solo servidor (sin WiFi AP) |
+| `[3]` | Solo WiFi AP |
+| `[4]` | Solo dependencias del sistema |
+| `[5]` | Actualizar servidor (recopia archivos y reinicia) |
+| `[6]` | Reconfigurar `.env` (nueva contraseña / impresora) |
+
+El script se encarga de:
+- Instalar Node.js 20, CUPS y herramientas de compilación
+- Generar el hash bcrypt de la contraseña de forma interactiva
+- Crear el archivo `.env` con todos los valores
+- Crear el usuario `print-server` y copiar el proyecto a `/opt/print-server`
+- Configurar el servicio systemd con arranque automático
+- Configurar el WiFi AP (hostapd + dnsmasq + netplan)
+
+---
+
+## Instalación manual
+
+### Instalar dependencias npm
 
 ```bash
 cd /ruta/del/proyecto
 npm install
 ```
 
-## Generar hash de contraseña
+### Generar hash de contraseña
 
 ```bash
 node scripts/generate-password.js
@@ -179,6 +213,7 @@ npm start
 - `GET /admin/api/jobs` → historial completo con `print_history`
 - `POST /admin/print/:id` → enviar foto a imprimir
 - `DELETE /admin/jobs/:id` → eliminar foto y registro (borra archivo del disco)
+- `GET /admin/report` → exportar reporte HTML con rango de fechas y filtros aplicados
 
 ## Base de datos (SQLite)
 
@@ -193,9 +228,10 @@ npm start
 - `routes/events.js` — SSE: mantiene conexiones abiertas, expone `broadcast(eventName, data)`
 - `routes/upload.js` — multer + validación + inserción en DB + broadcast `new-photo`
 - `routes/gallery.js` — galería pública y API JSON
-- `routes/admin.js` — login, logout, panel, jobs admin, print router, delete job
+- `routes/admin.js` — login, logout, panel, jobs admin, print router, delete job, generación de reporte HTML
 - `routes/print.js` — `lp` + actualizaciones DB + broadcast `print-update`
 - `middleware/auth.js` — `requireAdmin` (verifica sesión)
+- `public/js/theme.js` — toggle tema oscuro / Sakura (guarda preferencia en `localStorage`)
 
 ## Frontend
 
@@ -223,8 +259,10 @@ npm start
 
 ### `public/admin.html` — Panel de administración
 - Saludo personalizado al profesor
-- Filtro por nombre de alumno y por curso (se aplica en tiempo real)
+- Filtro por nombre de alumno, por curso y por mes (se aplica en tiempo real)
+- Rango de fechas y botón **Exportar reporte** → descarga tabla HTML con todos los filtros aplicados, apta para Excel
 - Contador de trabajos con indicador de filtro activo
+- Toggle de tema oscuro / Sakura (persiste en `localStorage`)
 - Vista adaptativa:
   - **Desktop**: tabla con miniatura, nombre, curso, fecha, estado, impresiones y acciones
   - **Mobile**: tarjetas con miniatura y acciones
@@ -442,7 +480,13 @@ curl -b cookies.txt -X POST http://localhost:3000/admin/print/1
 curl -b cookies.txt -X DELETE http://localhost:3000/admin/jobs/1
 ```
 
-7. Ver cola CUPS:
+7. Exportar reporte:
+
+```bash
+curl -b cookies.txt "http://localhost:3000/admin/report?from=2025-01-01&to=2025-12-31" -o reporte.html
+```
+
+8. Ver cola CUPS:
 
 ```bash
 lpq -P Brother-DCP-L3551CDW
