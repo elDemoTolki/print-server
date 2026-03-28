@@ -200,7 +200,9 @@
                    'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
     function monthKey(dateStr) {
-      const d = new Date(dateStr);
+      const utc = dateStr.includes('Z') || dateStr.includes('+')
+        ? dateStr : dateStr.replace(' ', 'T') + 'Z';
+      const d = new Date(utc);
       return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
     }
     function monthLabel(key) {
@@ -227,7 +229,13 @@
         .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
     function fmtDate(str) {
-      return new Date(str).toLocaleString('es-CL', {
+      // Registros antiguos: "2026-03-28 20:08:00" (sin zona horaria).
+      // Los normalizamos a UTC explícito para que el browser los convierta
+      // correctamente a hora local, igual que los nuevos ("...Z").
+      const utc = str.includes('Z') || str.includes('+')
+        ? str
+        : str.replace(' ', 'T') + 'Z';
+      return new Date(utc).toLocaleString('es-CL', {
         day:'2-digit', month:'2-digit', year:'2-digit',
         hour:'2-digit', minute:'2-digit'
       });

@@ -255,7 +255,9 @@
                    'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
     function monthKey(dateStr) {
-      const d = new Date(dateStr);
+      const utc = dateStr.includes('Z') || dateStr.includes('+')
+        ? dateStr : dateStr.replace(' ', 'T') + 'Z';
+      const d = new Date(utc);
       return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
     }
     function monthLabel(key) {

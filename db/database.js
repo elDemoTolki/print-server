@@ -24,7 +24,12 @@ function getPendingJobs() {
 }
 
 function createJob({ filename, original_name, alumno, curso }) {
-  const stmt = db.prepare('INSERT INTO jobs (filename, original_name, alumno, curso) VALUES (@filename, @original_name, @alumno, @curso)');
+  // strftime con 'now' siempre es UTC; el sufijo Z lo marca explícitamente
+  // para que cualquier parser JS lo interprete como UTC y convierta a hora local correctamente.
+  const stmt = db.prepare(
+    "INSERT INTO jobs (filename, original_name, alumno, curso, uploaded_at) " +
+    "VALUES (@filename, @original_name, @alumno, @curso, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))"
+  );
   const result = stmt.run({ filename, original_name, alumno, curso });
   return getJobById(result.lastInsertRowid);
 }
