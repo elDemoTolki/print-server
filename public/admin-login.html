@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin - Login</title>
+  <link rel="stylesheet" href="/css/tailwind.min.css" />
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body class="bg-[#0a0a0a] text-[#e5e5e5] min-h-screen flex items-center justify-center">
+  <div class="card w-full max-w-sm">
+    <h2 class="text-2xl font-display mb-2">Panel Admin</h2>
+    <p class="mb-4 text-gray-400">Ingresa la contraseña del profesor</p>
+    <form id="login-form" class="space-y-3">
+      <input id="password" name="password" type="password" placeholder="Contraseña" class="w-full" required />
+      <button type="submit" class="btn-primary w-full">Entrar</button>
+      <p id="feedback" class="text-sm"></p>
+    </form>
+  </div>
+
+  <script>
+    const form = document.getElementById('login-form');
+    const password = document.getElementById('password');
+    const feedback = document.getElementById('feedback');
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const body = { password: password.value };
+      feedback.textContent = ''; 
+      try {
+        const res = await fetch('/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const json = await res.json();
+        if (json.success) {
+          window.location.href = json.redirect || '/admin';
+        } else {
+          feedback.textContent = json.error || 'Credenciales inválidas.';
+          feedback.style.color = '#f87171';
+        }
+      } catch (err) {
+        feedback.textContent = 'Error de conexión.';
+        feedback.style.color = '#f87171';
+      }
+    });
+  </script>
+</body>
+</html>

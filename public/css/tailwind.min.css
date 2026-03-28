@@ -1,0 +1,5 @@
+/* Tailwind placeholder (contiene estilos locales mínimos); para producción se recomienda copiar el archivo completo desde tailwindcss. */
+*, *::before, *::after { box-sizing: border-box; }
+body { margin:0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background: #0a0a0a; color: #e5e5e5; }
+a { color: inherit; text-decoration: none; }
+.button { display: inline-flex; align-items: center; justify-content: center; }

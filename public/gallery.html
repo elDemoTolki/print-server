@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Galería pública - Taller de Fotografía</title>
+  <link rel="stylesheet" href="/css/tailwind.min.css" />
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body class="bg-[#0a0a0a] text-[#e5e5e5]">
+  <main class="container mx-auto px-4 py-6">
+    <header class="mb-6 text-center">
+      <h1 class="text-3xl font-display">Galería en vivo</h1>
+      <p class="text-gray-400">Fotos recientes de los alumnos</p>
+      <div class="accent-line mx-auto mt-3"></div>
+    </header>
+
+    <section class="mb-4 text-right">
+      <a href="/" class="text-[#f0c040] underline">← Volver a subir</a>
+    </section>
+
+    <section id="grid" class="photo-grid"></section>
+
+    <p id="empty-message" class="mt-4 text-center text-gray-500">Cargando fotos…</p>
+  </main>
+
+  <script>
+    const grid = document.getElementById('grid');
+    const empty = document.getElementById('empty-message');
+
+    function addPhoto(job) {
+      const card = document.createElement('a');
+      const src = `/uploads/${job.filename}`;
+      card.className = 'photo-card';
+      card.href = src;
+      card.target = '_blank';
+      card.innerHTML = `<img src="${src}" alt="${job.alumno} - ${job.curso}" loading="lazy" />`;
+      grid.prepend(card);
+    }
+
+    async function loadJobs() {
+      const res = await fetch('/api/jobs');
+      const jobs = await res.json();
+      if (!Array.isArray(jobs) || jobs.length === 0) {
+        empty.textContent = 'No hay fotos aún.';
+        return;
+      }
+      empty.classList.add('hidden');
+      jobs.forEach(addPhoto);
+    }
+
+    const sse = new EventSource('/events');
+    sse.addEventListener('new-photo', (e) => {
+      const job = JSON.parse(e.data);
+      addPhoto(job);
+      empty.classList.add('hidden');
+    });
+
+    sse.onerror = () => {
+      console.warn('SSE se desconectó, reintentando...');
+    };
+
+    loadJobs().catch(() => {
+      empty.textContent = 'Error cargando la galería.';
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Taller de Fotografía - Subir Foto</title>
+  <link rel="stylesheet" href="/css/tailwind.min.css" />
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body class="min-h-screen bg-[#0a0a0a] text-[#e5e5e5]">
+  <main class="container mx-auto px-4 py-6">
+    <header class="mb-6 text-center">
+      <h1 class="text-3xl font-display">Taller de Fotografía</h1>
+      <p class="mt-1 text-gray-400">Sube tu trabajo</p>
+      <div class="accent-line mx-auto mt-3"></div>
+    </header>
+
+    <section class="card mx-auto max-w-lg">
+      <form id="upload-form" class="space-y-4" novalidate>
+        <div>
+          <label class="block text-sm mb-1" for="alumno">Nombre del alumno</label>
+          <input id="alumno" name="alumno" type="text" placeholder="Tu nombre completo" class="w-full" required />
+        </div>
+        <div>
+          <label class="block text-sm mb-1" for="curso">Curso</label>
+          <input id="curso" name="curso" type="text" placeholder="Ej: 3°A" class="w-full" required />
+        </div>
+        <div>
+          <label class="block text-sm mb-1" for="photo">Foto (JPG, PNG, WEBP)</label>
+          <input id="photo" name="photo" type="file" accept="image/*" class="w-full" required />
+        </div>
+
+        <div id="preview-container" class="hidden">
+          <img id="preview" alt="Previsualización" class="mt-2 w-full h-auto rounded-lg object-cover" />
+        </div>
+
+        <div>
+          <button id="submit-btn" type="submit" class="btn-primary w-full">Subir foto</button>
+        </div>
+
+        <div id="feedback" class="text-sm"></div>
+      </form>
+
+      <div id="success-state" class="hidden p-4 rounded-lg bg-green-900 mt-4">
+        <p id="success-message" class="text-green-200"></p>
+        <button id="upload-another" class="btn-secondary mt-3 w-full">Subir otra foto</button>
+      </div>
+
+      <div class="mt-4 text-center">
+        <a href="/gallery" class="text-[#f0c040] underline">Ver Galería →</a>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const form = document.getElementById('upload-form');
+    const fileInput = document.getElementById('photo');
+    const preview = document.getElementById('preview');
+    const previewContainer = document.getElementById('preview-container');
+    const feedback = document.getElementById('feedback');
+    const submitBtn = document.getElementById('submit-btn');
+    const successState = document.getElementById('success-state');
+    const successMessage = document.getElementById('success-message');
+    const uploadAnother = document.getElementById('upload-another');
+
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files[0];
+      if (!file) {
+        previewContainer.classList.add('hidden');
+        preview.src = '';
+        return;
+      }
+      const url = URL.createObjectURL(file);
+      preview.src = url;
+      previewContainer.classList.remove('hidden');
+    });
+
+    function setLoading(isLoading) {
+      submitBtn.disabled = isLoading;
+      submitBtn.textContent = isLoading ? 'Subiendo...' : 'Subir foto';
+    }
+
+    function showError(message) {
+      feedback.className = 'text-sm text-red-500';
+      feedback.textContent = message;
+    }
+
+    function showSuccess(message) {
+      feedback.textContent = '';
+      successMessage.textContent = message;
+      successState.classList.remove('hidden');
+      form.classList.add('hidden');
+    }
+
+    uploadAnother.addEventListener('click', () => {
+      form.reset();
+      preview.src = '';
+      previewContainer.classList.add('hidden');
+      successState.classList.add('hidden');
+      form.classList.remove('hidden');
+      feedback.textContent = '';
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Subir foto';
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const alumno = document.getElementById('alumno').value.trim();
+      const curso = document.getElementById('curso').value.trim();
+      const photo = fileInput.files[0];
+
+      if (!alumno || !curso || !photo) {
+        return showError('Completa todos los campos y selecciona una foto.');
+      }
+
+      setLoading(true);
+
+      const data = new FormData(form);
+
+      try {
+        const res = await fetch('/upload', { method: 'POST', body: data });
+        const json = await res.json();
+
+        if (json.success) {
+          showSuccess(`${json.message} (${alumno} - ${curso})`);
+        } else {
+          showError(json.error || 'Error al subir la imagen.');
+        }
+      } catch (err) {
+        showError('Error de conexión. Intenta nuevamente.');
+      } finally {
+        setLoading(false);
+      }
+    });
+  </script>
+</body>
+</html>

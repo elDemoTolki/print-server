@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS jobs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  filename TEXT NOT NULL,
+  original_name TEXT NOT NULL,
+  alumno TEXT NOT NULL,
+  curso TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  print_count INTEGER NOT NULL DEFAULT 0,
+  uploaded_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS print_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  job_id INTEGER NOT NULL REFERENCES jobs(id),
+  printed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
+CREATE INDEX IF NOT EXISTS idx_jobs_uploaded_at ON jobs(uploaded_at);
+CREATE INDEX IF NOT EXISTS idx_print_log_job_id ON print_log(job_id);

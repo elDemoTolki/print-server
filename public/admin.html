@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Panel Admin - Taller de Fotografía</title>
+  <link rel="stylesheet" href="/css/tailwind.min.css" />
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body class="bg-[#0a0a0a] text-[#e5e5e5] min-h-screen">
+  <main class="container mx-auto px-4 py-6">
+    <header class="mb-6 flex items-center justify-between">
+      <div>
+        <h1 class="text-3xl font-display">Panel de impresión</h1>
+        <p class="text-gray-400">Historial de trabajos y control de impresión</p>
+      </div>
+      <button id="logout" class="btn-secondary">Cerrar sesión</button>
+    </header>
+
+    <section class="mb-4 text-sm text-gray-300">
+      <span>Eventos SSE: </span><span id="sse-status" class="font-semibold">Conectando…</span>
+    </section>
+
+    <section class="card overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead>
+          <tr class="border-b border-[#2a2a2a]">
+            <th class="p-2">#</th>
+            <th>Alumno</th>
+            <th>Curso</th>
+            <th>Subido</th>
+            <th>Status</th>
+            <th>Impresiones</th>
+            <th>Acción</th>
+          </tr>
+        </thead>
+        <tbody id="jobs-body"></tbody>
+      </table>
+    </section>
+
+    <p id="empty-msg" class="mt-4 text-gray-500 hidden">Sin trabajos todavía.</p>
+  </main>
+
+  <script>
+    const sseStatus = document.getElementById('sse-status');
+    const jobsBody = document.getElementById('jobs-body');
+    const emptyMsg = document.getElementById('empty-msg');
+    const logoutBtn = document.getElementById('logout');
+
+    function renderJobs(jobs) {
+      jobsBody.innerHTML = '';
+      if (!jobs.length) {
+        emptyMsg.classList.remove('hidden');
+        return;
+      }
+      emptyMsg.classList.add('hidden');
+      jobs.forEach((job) => {
+        const tr = document.createElement('tr');
+        tr.className = 'border-b border-[#2a2a2a]';
+
+        const printHistory = job.print_history && job.print_history.length ? job.print_history.join(', ') : '-';
+        tr.innerHTML = `
+          <td class="p-2">${job.id}</td>
+          <td>${job.alumno}</td>
+          <td>${job.curso}</td>
+          <td>${new Date(job.uploaded_at).toLocaleString()}</td>
+          <td>${job.status}</td>
+          <td>${job.print_count}</td>
+          <td><button class="btn-primary" data-id="${job.id}">Imprimir</button></td>
+        `;
+
+        const button = tr.querySelector('button');
+        button.addEventListener('click', async () => {
+          button.disabled = true;
+          button.textContent = 'Enviando...';
+          try {
+            const res = await fetch(`/admin/print/${job.id}`, { method: 'POST' });
+            const data = await res.json();
+            if (!data.success) {
+              alert(data.error || 'Error en la impresión');
+            } else {
+              loadJobs();
+            }
+          } catch (err) {
+            alert('Error de conexión con el servidor.');
+          } finally {
+            button.disabled = false;
+            button.textContent = 'Imprimir';
+          }
+        });
+
+        jobsBody.appendChild(tr);
+      });
+    }
+
+    async function loadJobs() {
+      try {
+        const res = await fetch('/admin/api/jobs');
+        const jobs = await res.json();
+        renderJobs(jobs);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    const es = new EventSource('/events');
+    es.addEventListener('connected', () => {
+      sseStatus.textContent = 'Conectado';
+      sseStatus.className = 'font-semibold text-green-400';
+    });
+
+    es.addEventListener('print-update', (e) => {
+      const info = JSON.parse(e.data);
+      loadJobs();
+      console.log('Print update', info);
+    });
+
+    es.onerror = () => {
+      sseStatus.textContent = 'Reconectando...';
+      sseStatus.className = 'font-semibold text-yellow-400';
+    };
+
+    logoutBtn.addEventListener('click', async () => {
+      await fetch('/admin/logout', { method: 'POST' });
+      window.location.href = '/admin/login';
+    });
+
+    loadJobs();
+  </script>
+</body>
+</html>
