@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Galería — Taller de Fotografía</title>
+  <title>Galería — Electivo de Fotografía y Multimedia</title>
   <link rel="stylesheet" href="/css/app.css" />
+  <script>if(localStorage.getItem('pf-theme')==='sakura')document.documentElement.classList.add('theme-sakura');</script>
   <style>
     .gallery-header { padding: 28px 0 20px; }
     .gallery-top {
@@ -443,5 +444,11 @@
 
     loadJobs();
   </script>
+
+  <button class="theme-toggle" id="theme-toggle" title="Cambiar tema">
+    <span class="theme-toggle-icon">🌸</span>
+    <span class="theme-toggle-label">Modo sakura</span>
+  </button>
+  <script src="/js/theme.js"></script>
 </body>
 </html>

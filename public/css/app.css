@@ -1,5 +1,6 @@
 /* ═══════════════════════════════════════════
-   Taller de Fotografía — Design System
+   Electivo de Fotografía y Multimedia
+   Design System — Dark + Sakura themes
    ═══════════════════════════════════════════ */
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -506,3 +507,200 @@ select:required:invalid { color: var(--muted); }
   to   { opacity: 1; }
 }
 .fade-in { animation: fadeIn 0.25s ease both; }
+
+/* ── Theme toggle button ── */
+.theme-toggle {
+  position: fixed;
+  bottom: 22px;
+  right: 18px;
+  z-index: 800;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  padding: 8px 14px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--muted-2);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: all var(--trans);
+  font-family: inherit;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+}
+.theme-toggle:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow);
+}
+.theme-toggle-icon { font-size: 1rem; line-height: 1; }
+
+/* ════════════════════════════════════════════════
+   🌸 SAKURA THEME
+   ════════════════════════════════════════════════ */
+
+.theme-sakura {
+  --bg:        #fdf4f7;
+  --surface:   #ffffff;
+  --surface-2: #fce8f1;
+  --border:    #f0c4d8;
+  --accent:    #c4487a;
+  --accent-h:  #d95e8f;
+  --text:      #2d1b25;
+  --muted:     #a07888;
+  --muted-2:   #7a5568;
+  --green:     #4e9268;
+  --red:       #c4487a;
+  --yellow:    #c07830;
+  --shadow:    0 8px 40px rgba(180, 80, 120, 0.12);
+  --shadow-sm: 0 2px 12px rgba(180, 80, 120, 0.08);
+}
+
+/* Fondo con bloom sakura */
+.theme-sakura body {
+  background:
+    radial-gradient(ellipse at 15% 40%, rgba(255, 182, 210, 0.18) 0%, transparent 55%),
+    radial-gradient(ellipse at 85% 15%, rgba(255, 160, 200, 0.13) 0%, transparent 45%),
+    radial-gradient(ellipse at 55% 85%, rgba(255, 192, 215, 0.12) 0%, transparent 45%),
+    var(--bg);
+}
+
+/* Inputs y selects */
+.theme-sakura input[type="text"],
+.theme-sakura input[type="password"],
+.theme-sakura select {
+  background: var(--surface);
+  color: var(--text);
+}
+.theme-sakura input::placeholder { color: var(--muted); }
+.theme-sakura input:focus,
+.theme-sakura select:focus {
+  box-shadow: 0 0 0 3px rgba(196, 72, 122, 0.15);
+}
+.theme-sakura select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a07888' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-color: var(--surface);
+}
+.theme-sakura select option { background: #fff; color: var(--text); }
+
+/* Botón primario */
+.theme-sakura .btn-primary { background: var(--accent); color: #fff; }
+.theme-sakura .btn-primary:hover:not(:disabled) {
+  background: var(--accent-h);
+  box-shadow: 0 6px 24px rgba(196, 72, 122, 0.3);
+}
+
+/* Botón de impresión */
+.theme-sakura .btn-print { background: var(--accent); color: #fff; }
+.theme-sakura .btn-print:hover:not(:disabled) { background: var(--accent-h); }
+
+/* Botón eliminar en sakura */
+.theme-sakura .btn-delete {
+  border-color: rgba(196, 72, 122, 0.35);
+  color: var(--accent);
+}
+.theme-sakura .btn-delete:hover:not(:disabled) {
+  background: rgba(196, 72, 122, 0.1);
+  border-color: var(--accent);
+}
+
+/* Upload zone */
+.theme-sakura .upload-zone {
+  background: var(--surface-2);
+  border-color: var(--border);
+}
+.theme-sakura .upload-zone:hover,
+.theme-sakura .upload-zone.drag-over {
+  border-color: var(--accent);
+  background: rgba(196, 72, 122, 0.04);
+}
+
+/* Accent line */
+.theme-sakura .accent-line { background: var(--accent); }
+
+/* Live badge */
+.theme-sakura .live-badge {
+  background: rgba(196, 72, 122, 0.1);
+  color: var(--accent);
+}
+.theme-sakura .live-badge .dot-live { background: var(--accent); }
+
+/* Badges de estado */
+.theme-sakura .badge-pending { background: rgba(192, 120, 48, 0.12); color: var(--yellow); }
+.theme-sakura .badge-printed  { background: rgba(78, 146, 104, 0.12); color: var(--green); }
+
+/* Dot ok */
+.theme-sakura .dot-ok { background: var(--green); }
+
+/* SSE pill */
+.theme-sakura .sse-pill { background: var(--surface-2); border-color: var(--border); }
+
+/* Toast */
+.theme-sakura .toast {
+  background: rgba(255, 240, 248, 0.95);
+  border-color: rgba(196, 72, 122, 0.4);
+  color: var(--accent);
+}
+
+/* Error message */
+.theme-sakura .error-msg {
+  background: rgba(196, 72, 122, 0.08);
+  border-color: rgba(196, 72, 122, 0.25);
+  color: var(--accent);
+}
+
+/* Photo card new badge */
+.theme-sakura .photo-card-new { background: var(--accent); color: #fff; }
+
+/* Gallery link color */
+.theme-sakura .gallery-link { color: var(--accent); }
+
+/* Admin table hover */
+.theme-sakura .admin-table tr:hover td { background: rgba(196, 72, 122, 0.03); }
+
+/* Accent text */
+.theme-sakura .text-accent { color: var(--accent); }
+
+/* Lightbox backdrop levemente rosado */
+.theme-sakura .lightbox-backdrop {
+  background: rgba(45, 27, 37, 0.85);
+}
+
+/* Decoración sutil: pétalos en esquinas usando pseudo-elementos del body */
+.theme-sakura body::before,
+.theme-sakura body::after {
+  content: '';
+  position: fixed;
+  pointer-events: none;
+  z-index: 0;
+  border-radius: 50%;
+  opacity: 0.07;
+}
+.theme-sakura body::before {
+  width: 320px;
+  height: 320px;
+  top: -80px;
+  right: -80px;
+  background: radial-gradient(circle, #f4a0c0 0%, transparent 70%);
+}
+.theme-sakura body::after {
+  width: 240px;
+  height: 240px;
+  bottom: -60px;
+  left: -60px;
+  background: radial-gradient(circle, #f4a0c0 0%, transparent 70%);
+}
+
+/* Todo el contenido sobre los pseudo-elementos */
+.theme-sakura .container,
+.theme-sakura .center-page { position: relative; z-index: 1; }
+
+/* Scrollbar sakura */
+.theme-sakura ::-webkit-scrollbar { width: 6px; }
+.theme-sakura ::-webkit-scrollbar-track { background: var(--surface-2); }
+.theme-sakura ::-webkit-scrollbar-thumb { background: #f0b8cc; border-radius: 3px; }
+.theme-sakura ::-webkit-scrollbar-thumb:hover { background: var(--accent); }

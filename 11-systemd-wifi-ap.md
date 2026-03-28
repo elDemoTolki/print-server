@@ -17,7 +17,7 @@ Contenido:
 
 ```ini
 [Unit]
-Description=Print Server - Taller de Fotografía
+Description=Print Server - Electivo de Fotografía y Multimedia
 After=network.target cups.service
 Wants=cups.service
 

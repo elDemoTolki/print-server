@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Taller de Fotografía</title>
+  <title>Electivo de Fotografía y Multimedia</title>
   <link rel="stylesheet" href="/css/app.css" />
+  <script>if(localStorage.getItem('pf-theme')==='sakura')document.documentElement.classList.add('theme-sakura');</script>
   <style>
     /* Page-specific */
     .page-header {
@@ -31,7 +32,7 @@
 
   <div class="container">
     <header class="page-header">
-      <p style="font-size:0.75rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;">Taller de Fotografía</p>
+      <p style="font-size:0.75rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;">Electivo de Fotografía y Multimedia</p>
       <h1 class="title">Sube tu trabajo</h1>
       <div class="accent-line"></div>
     </header>
@@ -98,6 +99,13 @@
   <!-- Toast -->
   <div class="toast" id="toast"></div>
 
+  <!-- Theme toggle -->
+  <button class="theme-toggle" id="theme-toggle" title="Cambiar tema">
+    <span class="theme-toggle-icon">🌸</span>
+    <span class="theme-toggle-label">Modo sakura</span>
+  </button>
+
+  <script src="/js/theme.js"></script>
   <script>
     const form        = document.getElementById('upload-form');
     const fileInput   = document.getElementById('photo');
