@@ -159,14 +159,18 @@ deploy_server() {
         || err ".env no encontrado. Ejecuta primero la opción de configuración."
 
     # Usuario dedicado sin privilegios
-    if ! id "$SERVICE_USER" &>/dev/null; then
-        useradd -r -s /bin/false "$SERVICE_USER"
-        ok "Usuario '$SERVICE_USER' creado"
-    else
-        ok "Usuario '$SERVICE_USER' ya existe"
-    fi
-
+    # -d $INSTALL_DIR: evita que useradd asigne /home/print-server como home,
+    #   que no existe y causa errores en npm y otras herramientas
+    # -M: no crear el directorio home (lo crea el paso siguiente)
     mkdir -p "$INSTALL_DIR"
+    if ! id "$SERVICE_USER" &>/dev/null; then
+        useradd -r -s /bin/false -d "$INSTALL_DIR" -M "$SERVICE_USER"
+        ok "Usuario '$SERVICE_USER' creado (home: $INSTALL_DIR)"
+    else
+        # Corregir home si apunta a /home/print-server
+        usermod -d "$INSTALL_DIR" "$SERVICE_USER"
+        ok "Usuario '$SERVICE_USER' ya existe — home actualizado a $INSTALL_DIR"
+    fi
     if command -v rsync &>/dev/null; then
         rsync -a --delete \
             --exclude=node_modules --exclude='.git' --exclude='*.log' \
@@ -181,8 +185,10 @@ deploy_server() {
     ok "Archivos copiados a $INSTALL_DIR"
 
     info "Instalando dependencias npm (producción)..."
-    sudo -u "$SERVICE_USER" npm install --production --prefix "$INSTALL_DIR" --silent \
-        || sudo -u "$SERVICE_USER" npm install --production --prefix "$INSTALL_DIR" 2>&1 | tail -5
+    sudo -u "$SERVICE_USER" HOME="$INSTALL_DIR" \
+        npm install --production --prefix "$INSTALL_DIR" --silent \
+        || sudo -u "$SERVICE_USER" HOME="$INSTALL_DIR" \
+        npm install --production --prefix "$INSTALL_DIR" 2>&1 | tail -5
     ok "npm install completado"
 
     mkdir -p "$INSTALL_DIR/public/uploads"
