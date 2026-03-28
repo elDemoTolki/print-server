@@ -22,7 +22,7 @@ router.post('/:id', requireAdmin, (req, res) => {
   const filePath = path.resolve(config.uploadDir, job.filename);
 
   try {
-    execSync(`lp -d "${config.printerName}" -o media=A4 -o fit-to-page "${filePath}"`, { timeout: 20000 });
+    execSync(`lp -d "${config.printerName}" -o media=4x6 -o fit-to-page "${filePath}"`, { timeout: 20000 });
     db.incrementPrintCount(id);
     db.logPrint(id);
 
