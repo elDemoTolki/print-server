@@ -3,46 +3,113 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Admin - Login</title>
-  <link rel="stylesheet" href="/css/tailwind.min.css" />
+  <title>Admin — Taller de Fotografía</title>
   <link rel="stylesheet" href="/css/app.css" />
+  <style>
+    body { background: var(--bg); }
+    .login-wrap { max-width: 380px; width: 100%; }
+    .login-header {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    .login-header .icon {
+      font-size: 2.4rem;
+      margin-bottom: 12px;
+      display: block;
+    }
+    .login-header h1 {
+      font-size: 1.6rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+    .login-header p {
+      color: var(--muted-2);
+      font-size: 0.875rem;
+      margin-top: 4px;
+    }
+    .back-link {
+      display: block;
+      text-align: center;
+      margin-top: 20px;
+      color: var(--muted);
+      font-size: 0.82rem;
+      text-decoration: none;
+      transition: color var(--trans);
+    }
+    .back-link:hover { color: var(--text); }
+    #feedback {
+      font-size: 0.85rem;
+      min-height: 20px;
+    }
+  </style>
 </head>
-<body class="bg-[#0a0a0a] text-[#e5e5e5] min-h-screen flex items-center justify-center">
-  <div class="card w-full max-w-sm">
-    <h2 class="text-2xl font-display mb-2">Panel Admin</h2>
-    <p class="mb-4 text-gray-400">Ingresa la contraseña del profesor</p>
-    <form id="login-form" class="space-y-3">
-      <input id="password" name="password" type="password" placeholder="Contraseña" class="w-full" required />
-      <button type="submit" class="btn-primary w-full">Entrar</button>
-      <p id="feedback" class="text-sm"></p>
-    </form>
+<body>
+  <div class="center-page">
+    <div class="login-wrap">
+      <div class="login-header">
+        <span class="icon">🔐</span>
+        <h1>Panel Admin</h1>
+        <p>Ingresa la contraseña del profesor</p>
+      </div>
+
+      <div class="card">
+        <form id="login-form" class="space-y" novalidate>
+          <div>
+            <label class="field-label" for="password">Contraseña</label>
+            <input
+              id="password"
+              name="password"
+              type="password"
+              placeholder="••••••••"
+              autocomplete="current-password"
+              required
+            />
+          </div>
+          <div id="feedback"></div>
+          <button type="submit" class="btn btn-primary" id="submit-btn">
+            Entrar
+          </button>
+        </form>
+      </div>
+
+      <a href="/" class="back-link">← Volver al inicio</a>
+    </div>
   </div>
 
   <script>
-    const form = document.getElementById('login-form');
-    const password = document.getElementById('password');
-    const feedback = document.getElementById('feedback');
+    const form      = document.getElementById('login-form');
+    const password  = document.getElementById('password');
+    const feedback  = document.getElementById('feedback');
+    const submitBtn = document.getElementById('submit-btn');
 
-    form.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const body = { password: password.value };
-      feedback.textContent = ''; 
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      feedback.innerHTML = '';
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Verificando…';
+
       try {
-        const res = await fetch('/admin/login', {
+        const res  = await fetch('/admin/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
+          body: JSON.stringify({ password: password.value }),
         });
         const json = await res.json();
+
         if (json.success) {
+          submitBtn.textContent = '✓ Entrando…';
           window.location.href = json.redirect || '/admin';
         } else {
-          feedback.textContent = json.error || 'Credenciales inválidas.';
-          feedback.style.color = '#f87171';
+          feedback.innerHTML = `<div class="error-msg">${json.error || 'Contraseña incorrecta.'}</div>`;
+          password.value = '';
+          password.focus();
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Entrar';
         }
-      } catch (err) {
-        feedback.textContent = 'Error de conexión.';
-        feedback.style.color = '#f87171';
+      } catch {
+        feedback.innerHTML = '<div class="error-msg">Error de conexión. Intenta nuevamente.</div>';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Entrar';
       }
     });
   </script>

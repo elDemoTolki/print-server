@@ -3,99 +3,202 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Panel Admin - Taller de Fotografía</title>
-  <link rel="stylesheet" href="/css/tailwind.min.css" />
+  <title>Panel Admin — Taller de Fotografía</title>
   <link rel="stylesheet" href="/css/app.css" />
+  <style>
+    .admin-header {
+      padding: 24px 0 20px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .admin-meta {
+      margin-top: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .admin-body { padding-bottom: 48px; }
+    .card-overflow { overflow-x: auto; }
+    .print-count {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--muted-2);
+      font-size: 0.8rem;
+    }
+    .print-count strong { color: var(--text); }
+    .job-date { font-size: 0.78rem; color: var(--muted-2); }
+  </style>
 </head>
-<body class="bg-[#0a0a0a] text-[#e5e5e5] min-h-screen">
-  <main class="container mx-auto px-4 py-6">
-    <header class="mb-6 flex items-center justify-between">
+<body class="page">
+
+  <div class="container">
+    <header class="admin-header">
       <div>
-        <h1 class="text-3xl font-display">Panel de impresión</h1>
-        <p class="text-gray-400">Historial de trabajos y control de impresión</p>
+        <p style="font-size:0.72rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Panel de control</p>
+        <h1 class="title" style="font-size:clamp(1.4rem,4vw,2rem)">Impresión</h1>
+        <div class="admin-meta">
+          <span class="sse-pill" id="sse-pill">
+            <span class="dot dot-warn" id="sse-dot"></span>
+            <span id="sse-label">Conectando…</span>
+          </span>
+          <span class="count-badge" id="count-badge" style="display:inline-block;background:var(--surface-2);border:1px solid var(--border);color:var(--muted-2);font-size:0.78rem;font-weight:600;padding:3px 10px;border-radius:100px">—</span>
+        </div>
       </div>
-      <button id="logout" class="btn-secondary">Cerrar sesión</button>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;padding-top:4px">
+        <button id="logout-btn" class="btn-secondary">Cerrar sesión</button>
+        <a href="/gallery" style="color:var(--muted-2);font-size:0.8rem;text-decoration:none;font-weight:600">Ver galería →</a>
+      </div>
     </header>
 
-    <section class="mb-4 text-sm text-gray-300">
-      <span>Eventos SSE: </span><span id="sse-status" class="font-semibold">Conectando…</span>
-    </section>
+    <main class="admin-body">
 
-    <section class="card overflow-x-auto">
-      <table class="w-full text-left text-sm">
-        <thead>
-          <tr class="border-b border-[#2a2a2a]">
-            <th class="p-2">#</th>
-            <th>Alumno</th>
-            <th>Curso</th>
-            <th>Subido</th>
-            <th>Status</th>
-            <th>Impresiones</th>
-            <th>Acción</th>
-          </tr>
-        </thead>
-        <tbody id="jobs-body"></tbody>
-      </table>
-    </section>
+      <!-- Desktop: table -->
+      <div class="admin-desktop card card-overflow">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Foto</th>
+              <th>#</th>
+              <th>Alumno</th>
+              <th>Subido</th>
+              <th>Estado</th>
+              <th>Impresiones</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <tbody id="jobs-table-body"></tbody>
+        </table>
+        <div id="table-empty" class="empty-state hidden">
+          <div class="icon">🖨️</div>
+          <p>No hay trabajos todavía.</p>
+        </div>
+      </div>
 
-    <p id="empty-msg" class="mt-4 text-gray-500 hidden">Sin trabajos todavía.</p>
-  </main>
+      <!-- Mobile: cards -->
+      <div class="admin-mobile">
+        <div class="job-card-wrap" id="jobs-cards"></div>
+        <div id="cards-empty" class="empty-state hidden">
+          <div class="icon">🖨️</div>
+          <p>No hay trabajos todavía.</p>
+        </div>
+      </div>
+
+    </main>
+  </div>
 
   <script>
-    const sseStatus = document.getElementById('sse-status');
-    const jobsBody = document.getElementById('jobs-body');
-    const emptyMsg = document.getElementById('empty-msg');
-    const logoutBtn = document.getElementById('logout');
+    const tableBody  = document.getElementById('jobs-table-body');
+    const cardsWrap  = document.getElementById('jobs-cards');
+    const tableEmpty = document.getElementById('table-empty');
+    const cardsEmpty = document.getElementById('cards-empty');
+    const sseDot     = document.getElementById('sse-dot');
+    const sseLabel   = document.getElementById('sse-label');
+    const countBadge = document.getElementById('count-badge');
+    const logoutBtn  = document.getElementById('logout-btn');
+
+    function escHtml(str) {
+      return String(str)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function fmtDate(str) {
+      return new Date(str).toLocaleString('es-CL', {
+        day:'2-digit', month:'2-digit', year:'2-digit',
+        hour:'2-digit', minute:'2-digit'
+      });
+    }
+
+    function badgeHtml(status) {
+      return status === 'printed'
+        ? '<span class="badge badge-printed">Impreso</span>'
+        : '<span class="badge badge-pending">Pendiente</span>';
+    }
+
+    async function printJob(id, btn) {
+      btn.disabled = true;
+      const orig = btn.textContent;
+      btn.textContent = 'Enviando…';
+      try {
+        const res  = await fetch(`/admin/print/${id}`, { method: 'POST' });
+        const data = await res.json();
+        if (!data.success) alert(data.error || 'Error en la impresión.');
+        else loadJobs();
+      } catch {
+        alert('Error de conexión con el servidor.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = orig;
+      }
+    }
 
     function renderJobs(jobs) {
-      jobsBody.innerHTML = '';
+      tableBody.innerHTML = '';
+      cardsWrap.innerHTML = '';
+
       if (!jobs.length) {
-        emptyMsg.classList.remove('hidden');
+        tableEmpty.classList.remove('hidden');
+        cardsEmpty.classList.remove('hidden');
+        countBadge.textContent = '0 trabajos';
         return;
       }
-      emptyMsg.classList.add('hidden');
+
+      tableEmpty.classList.add('hidden');
+      cardsEmpty.classList.add('hidden');
+      countBadge.textContent = jobs.length === 1 ? '1 trabajo' : `${jobs.length} trabajos`;
+
       jobs.forEach((job) => {
+        const thumb = `/uploads/${escHtml(job.filename)}`;
+
+        // ── Table row (desktop) ──
         const tr = document.createElement('tr');
-        tr.className = 'border-b border-[#2a2a2a]';
-
-        const printHistory = job.print_history && job.print_history.length ? job.print_history.join(', ') : '-';
         tr.innerHTML = `
-          <td class="p-2">${job.id}</td>
-          <td>${job.alumno}</td>
-          <td>${job.curso}</td>
-          <td>${new Date(job.uploaded_at).toLocaleString()}</td>
-          <td>${job.status}</td>
-          <td>${job.print_count}</td>
-          <td><button class="btn-primary" data-id="${job.id}">Imprimir</button></td>
+          <td><img class="thumb" src="${thumb}" alt="${escHtml(job.alumno)}" loading="lazy" /></td>
+          <td class="text-muted">${job.id}</td>
+          <td>
+            <div class="job-name">${escHtml(job.alumno)}</div>
+            <div class="job-course">${escHtml(job.curso)}</div>
+          </td>
+          <td class="job-date">${fmtDate(job.uploaded_at)}</td>
+          <td>${badgeHtml(job.status)}</td>
+          <td class="print-count"><strong>${job.print_count}</strong> vez</td>
+          <td><button class="btn btn-print" data-id="${job.id}">🖨 Imprimir</button></td>
         `;
-
-        const button = tr.querySelector('button');
-        button.addEventListener('click', async () => {
-          button.disabled = true;
-          button.textContent = 'Enviando...';
-          try {
-            const res = await fetch(`/admin/print/${job.id}`, { method: 'POST' });
-            const data = await res.json();
-            if (!data.success) {
-              alert(data.error || 'Error en la impresión');
-            } else {
-              loadJobs();
-            }
-          } catch (err) {
-            alert('Error de conexión con el servidor.');
-          } finally {
-            button.disabled = false;
-            button.textContent = 'Imprimir';
-          }
+        tr.querySelector('[data-id]').addEventListener('click', function() {
+          printJob(job.id, this);
         });
+        tableBody.appendChild(tr);
 
-        jobsBody.appendChild(tr);
+        // ── Mobile card ──
+        const card = document.createElement('div');
+        card.className = 'job-card fade-up';
+        card.innerHTML = `
+          <img class="thumb" src="${thumb}" alt="${escHtml(job.alumno)}" loading="lazy" />
+          <div class="info" style="flex:1;min-width:0">
+            <div class="name">${escHtml(job.alumno)}</div>
+            <div class="meta">${escHtml(job.curso)} · ${fmtDate(job.uploaded_at)}</div>
+            <div class="card-footer">
+              ${badgeHtml(job.status)}
+              <span class="print-count"><strong>${job.print_count}</strong>×</span>
+              <button class="btn btn-print" style="margin-left:auto" data-id="${job.id}">🖨 Imprimir</button>
+            </div>
+          </div>
+        `;
+        card.querySelector('[data-id]').addEventListener('click', function() {
+          printJob(job.id, this);
+        });
+        cardsWrap.appendChild(card);
       });
     }
 
     async function loadJobs() {
       try {
-        const res = await fetch('/admin/api/jobs');
+        const res  = await fetch('/admin/api/jobs');
         const jobs = await res.json();
         renderJobs(jobs);
       } catch (err) {
@@ -103,23 +206,28 @@
       }
     }
 
+    // ── SSE ───────────────────────────────────
     const es = new EventSource('/events');
+
     es.addEventListener('connected', () => {
-      sseStatus.textContent = 'Conectado';
-      sseStatus.className = 'font-semibold text-green-400';
+      sseDot.className = 'dot dot-ok';
+      sseLabel.textContent = 'Conectado';
     });
 
-    es.addEventListener('print-update', (e) => {
-      const info = JSON.parse(e.data);
+    es.addEventListener('new-photo', () => {
       loadJobs();
-      console.log('Print update', info);
+    });
+
+    es.addEventListener('print-update', () => {
+      loadJobs();
     });
 
     es.onerror = () => {
-      sseStatus.textContent = 'Reconectando...';
-      sseStatus.className = 'font-semibold text-yellow-400';
+      sseDot.className = 'dot dot-warn';
+      sseLabel.textContent = 'Reconectando…';
     };
 
+    // ── Logout ───────────────────────────────
     logoutBtn.addEventListener('click', async () => {
       await fetch('/admin/logout', { method: 'POST' });
       window.location.href = '/admin/login';

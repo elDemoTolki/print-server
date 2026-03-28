@@ -3,66 +3,159 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Galería pública - Taller de Fotografía</title>
-  <link rel="stylesheet" href="/css/tailwind.min.css" />
+  <title>Galería — Taller de Fotografía</title>
   <link rel="stylesheet" href="/css/app.css" />
+  <style>
+    .gallery-header {
+      padding: 28px 0 20px;
+    }
+    .gallery-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .back-link {
+      color: var(--muted-2);
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: color var(--trans);
+      margin-top: 6px;
+    }
+    .back-link:hover { color: var(--text); }
+    .count-badge {
+      display: inline-block;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--muted-2);
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 100px;
+      margin-top: 10px;
+    }
+    .gallery-section { padding-bottom: 48px; }
+  </style>
 </head>
-<body class="bg-[#0a0a0a] text-[#e5e5e5]">
-  <main class="container mx-auto px-4 py-6">
-    <header class="mb-6 text-center">
-      <h1 class="text-3xl font-display">Galería en vivo</h1>
-      <p class="text-gray-400">Fotos recientes de los alumnos</p>
-      <div class="accent-line mx-auto mt-3"></div>
+<body class="page">
+
+  <div class="container">
+    <header class="gallery-header">
+      <div class="gallery-top">
+        <div>
+          <h1 class="title">Galería en vivo</h1>
+          <div class="accent-line"></div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+          <span class="live-badge"><span class="dot dot-live"></span>EN VIVO</span>
+          <a href="/" class="back-link">← Subir foto</a>
+        </div>
+      </div>
+      <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span class="sse-pill" id="sse-status">
+          <span class="dot dot-warn"></span>
+          Conectando…
+        </span>
+        <span class="count-badge" id="count-badge">0 fotos</span>
+      </div>
     </header>
 
-    <section class="mb-4 text-right">
-      <a href="/" class="text-[#f0c040] underline">← Volver a subir</a>
+    <section class="gallery-section">
+      <div id="grid" class="photo-grid"></div>
+      <div id="empty-state" class="empty-state">
+        <div class="icon">🎞️</div>
+        <p>Cargando fotos…</p>
+      </div>
     </section>
-
-    <section id="grid" class="photo-grid"></section>
-
-    <p id="empty-message" class="mt-4 text-center text-gray-500">Cargando fotos…</p>
-  </main>
+  </div>
 
   <script>
-    const grid = document.getElementById('grid');
-    const empty = document.getElementById('empty-message');
+    const grid       = document.getElementById('grid');
+    const emptyState = document.getElementById('empty-state');
+    const sseStatus  = document.getElementById('sse-status');
+    const countBadge = document.getElementById('count-badge');
+    let   photoCount = 0;
 
-    function addPhoto(job) {
+    function updateCount() {
+      countBadge.textContent = photoCount === 1 ? '1 foto' : `${photoCount} fotos`;
+    }
+
+    function addPhoto(job, prepend = false) {
       const card = document.createElement('a');
-      const src = `/uploads/${job.filename}`;
-      card.className = 'photo-card';
+      const src  = `/uploads/${job.filename}`;
+      card.className = 'photo-card fade-in';
       card.href = src;
       card.target = '_blank';
-      card.innerHTML = `<img src="${src}" alt="${job.alumno} - ${job.curso}" loading="lazy" />`;
-      grid.prepend(card);
+      card.rel = 'noopener';
+      card.innerHTML = `
+        <img src="${src}" alt="${escHtml(job.alumno)} — ${escHtml(job.curso)}" loading="lazy" />
+        <div class="photo-card-info">
+          <div class="photo-card-name">${escHtml(job.alumno)}</div>
+          <div class="photo-card-course">${escHtml(job.curso)}</div>
+        </div>
+      `;
+
+      if (prepend) {
+        const newBadge = document.createElement('span');
+        newBadge.className = 'photo-card-new';
+        newBadge.textContent = 'NUEVO';
+        card.appendChild(newBadge);
+        grid.prepend(card);
+        setTimeout(() => newBadge.remove(), 8000);
+      } else {
+        grid.appendChild(card);
+      }
+
+      photoCount++;
+      updateCount();
+    }
+
+    function escHtml(str) {
+      return String(str)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
 
     async function loadJobs() {
-      const res = await fetch('/api/jobs');
-      const jobs = await res.json();
-      if (!Array.isArray(jobs) || jobs.length === 0) {
-        empty.textContent = 'No hay fotos aún.';
-        return;
+      try {
+        const res  = await fetch('/api/jobs');
+        const jobs = await res.json();
+        emptyState.classList.add('hidden');
+        if (!Array.isArray(jobs) || jobs.length === 0) {
+          emptyState.querySelector('p').textContent = 'Aún no hay fotos.';
+          emptyState.classList.remove('hidden');
+          return;
+        }
+        jobs.forEach(j => addPhoto(j, false));
+      } catch {
+        emptyState.querySelector('p').textContent = 'Error cargando la galería.';
+        emptyState.classList.remove('hidden');
       }
-      empty.classList.add('hidden');
-      jobs.forEach(addPhoto);
     }
 
+    // ── SSE ───────────────────────────────────
     const sse = new EventSource('/events');
+
+    sse.addEventListener('connected', () => {
+      sseStatus.innerHTML = '<span class="dot dot-ok"></span> Conectado';
+    });
+
     sse.addEventListener('new-photo', (e) => {
       const job = JSON.parse(e.data);
-      addPhoto(job);
-      empty.classList.add('hidden');
+      emptyState.classList.add('hidden');
+      addPhoto(job, true);
     });
 
     sse.onerror = () => {
-      console.warn('SSE se desconectó, reintentando...');
+      sseStatus.innerHTML = '<span class="dot dot-warn"></span> Reconectando…';
     };
 
-    loadJobs().catch(() => {
-      empty.textContent = 'Error cargando la galería.';
-    });
+    loadJobs();
   </script>
 </body>
 </html>
