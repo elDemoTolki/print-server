@@ -60,16 +60,91 @@ UPLOAD_DIR=public/uploads
 MAX_FILE_SIZE_MB=20
 ```
 
+## Prerrequisitos
+
+Antes de instalar el proyecto, asegúrate de tener lo siguiente:
+
+### Node.js 20+
+
+**Ubuntu/Debian:**
+
+```bash
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs
+node --version   # debe mostrar v20.x.x
+```
+
+**Windows:**
+
+Descarga el instalador LTS desde https://nodejs.org e instálalo. Verifica con:
+
+```cmd
+node --version
+npm --version
+```
+
+---
+
+### CUPS (sistema de impresión) — solo Linux
+
+```bash
+sudo apt install -y cups
+sudo systemctl enable cups
+sudo systemctl start cups
+```
+
+Añade tu usuario al grupo `lp` para poder imprimir sin root:
+
+```bash
+sudo usermod -aG lp $USER
+```
+
+Configura tu impresora en http://localhost:631 y anota el nombre CUPS (lo necesitarás en `.env`).
+
+---
+
+### Herramientas de compilación (necesarias para `better-sqlite3`)
+
+**Ubuntu/Debian:**
+
+```bash
+sudo apt update && sudo apt install -y build-essential python3
+```
+
+**Windows:**
+
+Instala el workload **"Desarrollo para escritorio con C++"** de Visual Studio Build Tools:
+
+```cmd
+winget install Microsoft.VisualStudio.2022.BuildTools
+```
+
+O descárgalo desde https://visualstudio.microsoft.com/visual-cpp-build-tools/
+
+---
+
+### Git (opcional, para clonar el repositorio)
+
+**Ubuntu/Debian:**
+
+```bash
+sudo apt install -y git
+```
+
+**Windows:**
+
+```cmd
+winget install Git.Git
+```
+
+---
+
 ## Instalación de dependencias
 
 ```bash
 cd /ruta/del/proyecto
 npm install
 ```
-
-> En Windows necesitam Visual Studio C++ (node-gyp) para `better-sqlite3`.
-> En Ubuntu:
-> `sudo apt update && sudo apt install -y build-essential python3`
 
 ## Generar hash de contraseña
 
