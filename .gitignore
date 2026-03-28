@@ -1,3 +1,6 @@
+node_modules/
+.env
+uploads/
 /00-master-prompt.md
 /01-project-setup.md
 /02-database.md
