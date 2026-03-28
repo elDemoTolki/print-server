@@ -16,9 +16,11 @@ info() { echo -e "${BLUE}→${NC}  $*"; }
 warn() { echo -e "${YELLOW}⚠${NC}  $*"; }
 err()  { echo -e "${RED}✖${NC}  $*" >&2; exit 1; }
 hr()   { echo -e "${BLUE}────────────────────────────────────────────────────${NC}"; }
-ask()  { read -rp "  $1" "$2"; }         # ask "Pregunta: " VAR
-askd() { read -rp "  $1 [${!2}]: " _t;  # ask with default
-         [[ -n "$_t" ]] && printf -v "$2" '%s' "$_t"; }
+askd() {                                  # askd "Pregunta" VAR_NAME
+    local _t
+    read -rp "  $1 [${!2}]: " _t
+    [[ -n "$_t" ]] && printf -v "$2" '%s' "$_t"
+}
 
 # ── Rutas ─────────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -27,43 +29,40 @@ INSTALL_DIR="/opt/print-server"
 SERVICE_USER="print-server"
 SERVICE_FILE="/etc/systemd/system/print-server.service"
 
-# ── Valores por defecto (editables) ──────────────────────────────────────────
+# ── Valores por defecto ───────────────────────────────────────────────────────
 PORT="3000"
 MAX_FILE_MB="20"
 PRINTER_NAME="Brother-DCP-L3551CDW"
 WIFI_IFACE="wlan0"
-WIFI_IP="192.168.4.1"
+WIFI_IP="192.168.1.10"          # IP del AP en la red local
+WIFI_MASK="24"
+DHCP_START="192.168.1.50"
+DHCP_END="192.168.1.200"
 SSID="TallerFoto"
-WIFI_PASS=""
+WIFI_PASS=""                    # Se pide interactivamente; WPA2 activado por defecto
+OPEN_NETWORK="no"               # "yes" = sin contraseña (debe confirmarse explícitamente)
 
 # =============================================================================
 # VERIFICACIONES
 # =============================================================================
 
-check_root() {
-    [[ $EUID -eq 0 ]] || err "Ejecuta con sudo: sudo bash $0"
-}
-
-check_linux() {
-    [[ "$(uname -s)" == "Linux" ]] || err "Este script solo funciona en Linux."
-}
+check_root()  { [[ $EUID -eq 0 ]] || err "Ejecuta con sudo: sudo bash $0"; }
+check_linux() { [[ "$(uname -s)" == "Linux" ]] || err "Este script solo funciona en Linux."; }
 
 # =============================================================================
-# INSTALAR DEPENDENCIAS
+# DEPENDENCIAS DEL SISTEMA
 # =============================================================================
 
 install_system_deps() {
     hr; info "Instalando dependencias del sistema..."
 
     apt-get update -qq
-
-    # Herramientas de compilación (requeridas por better-sqlite3 y bcrypt)
     apt-get install -y -qq build-essential python3 curl openssl
     ok "build-essential, python3, curl, openssl"
 
-    # Node.js 20
+    # Node.js 20+
     local node_ver=0
-    command -v node &>/dev/null && node_ver=$(node -v | cut -d. -f1 | tr -d v)
+    command -v node &>/dev/null && node_ver=$(node -v | cut -d. -f1 | tr -d v) || true
     if (( node_ver < 20 )); then
         info "Instalando Node.js 20..."
         curl -fsSL https://deb.nodesource.com/setup_20.x | bash - >/dev/null 2>&1
@@ -78,7 +77,6 @@ install_system_deps() {
         apt-get install -y -qq cups
         systemctl enable cups --quiet
         systemctl start cups
-        # Añadir usuario actual al grupo lp (para imprimir sin root)
         [[ -n "${SUDO_USER:-}" ]] && usermod -aG lp "$SUDO_USER"
         ok "CUPS instalado — configura la impresora en http://localhost:631"
     else
@@ -87,13 +85,9 @@ install_system_deps() {
 }
 
 install_wifi_deps() {
-    hr; info "Instalando herramientas WiFi AP..."
-    if ! command -v hostapd &>/dev/null; then
-        apt-get install -y -qq hostapd dnsmasq
-        ok "hostapd, dnsmasq"
-    else
-        ok "hostapd/dnsmasq ya instalados"
-    fi
+    hr; info "Instalando herramientas WiFi AP y portal cautivo..."
+    apt-get install -y -qq hostapd dnsmasq iptables-persistent netfilter-persistent
+    ok "hostapd, dnsmasq, iptables-persistent"
 }
 
 # =============================================================================
@@ -104,23 +98,19 @@ configure_env() {
     hr; info "Configuración del archivo .env"
     echo
 
-    # Puerto
     askd "Puerto HTTP" PORT
 
-    # Impresora
     echo
     info "Impresoras CUPS disponibles:"
-    lpstat -p 2>/dev/null | awk '{print "      "$2}' || warn "      No hay impresoras configuradas todavía."
+    lpstat -p 2>/dev/null | awk '{print "      "$2}' \
+        || warn "      No hay impresoras configuradas todavía (configúrala en http://localhost:631)."
     echo
     askd "Nombre de la impresora CUPS" PRINTER_NAME
-
-    # Tamaño máximo de foto
     askd "Tamaño máximo de foto (MB)" MAX_FILE_MB
 
-    # Contraseña del panel admin
+    # Contraseña del panel admin — necesita bcrypt disponible
     echo
     info "Generando hash de contraseña para el panel admin..."
-    # Asegurar que bcrypt esté disponible instalando npm deps en el proyecto fuente
     info "Instalando dependencias npm locales (necesario para generar el hash)..."
     npm install --prefix "$PROJECT_DIR" --silent 2>/dev/null \
         || npm install --prefix "$PROJECT_DIR" 2>&1 | tail -3
@@ -128,29 +118,25 @@ configure_env() {
     local ADMIN_PASS ADMIN_PASS2
     while true; do
         read -rsp "  Contraseña del panel admin: " ADMIN_PASS; echo
+        [[ -z "$ADMIN_PASS" ]] && { warn "La contraseña no puede estar vacía."; continue; }
         read -rsp "  Confirmar contraseña:        " ADMIN_PASS2; echo
         [[ "$ADMIN_PASS" == "$ADMIN_PASS2" ]] && break
         warn "Las contraseñas no coinciden. Intenta de nuevo."
     done
 
+    # Generar hash con bcrypt — la contraseña se pasa via env var para evitar
+    # problemas con caracteres especiales en el shell
     local ADMIN_HASH
-    ADMIN_HASH=$(node --input-type=module <<EOF
-import bcrypt from 'bcrypt';
-const h = await bcrypt.hash('${ADMIN_PASS//\'/\\\'}', 12);
-process.stdout.write(h);
-EOF
-    ) || ADMIN_HASH=$(node -e "
+    ADMIN_HASH=$(PASS="$ADMIN_PASS" node -e "
 const b = require('bcrypt');
-b.hash('${ADMIN_PASS//\'/\\\'}', 12).then(h => process.stdout.write(h));
+b.hash(process.env.PASS, 12).then(h => process.stdout.write(h));
 ")
     ok "Hash de contraseña generado"
 
-    # Session secret aleatorio
     local SESSION_SECRET
     SESSION_SECRET=$(openssl rand -hex 32)
     ok "Session secret generado automáticamente"
 
-    # Escribir .env
     cat > "$PROJECT_DIR/.env" <<ENVEOF
 PORT=${PORT}
 ADMIN_PASSWORD=${ADMIN_HASH}
@@ -169,11 +155,10 @@ ENVEOF
 deploy_server() {
     hr; info "Desplegando servidor en $INSTALL_DIR..."
 
-    # Verificar que .env existe
     [[ -f "$PROJECT_DIR/.env" ]] \
-        || err ".env no encontrado. Ejecuta la opción de configuración primero."
+        || err ".env no encontrado. Ejecuta primero la opción de configuración."
 
-    # Crear usuario dedicado
+    # Usuario dedicado sin privilegios
     if ! id "$SERVICE_USER" &>/dev/null; then
         useradd -r -s /bin/false "$SERVICE_USER"
         ok "Usuario '$SERVICE_USER' creado"
@@ -181,7 +166,6 @@ deploy_server() {
         ok "Usuario '$SERVICE_USER' ya existe"
     fi
 
-    # Copiar archivos (sin node_modules ni .git)
     mkdir -p "$INSTALL_DIR"
     if command -v rsync &>/dev/null; then
         rsync -a --delete \
@@ -196,13 +180,11 @@ deploy_server() {
     usermod -aG lp "$SERVICE_USER"
     ok "Archivos copiados a $INSTALL_DIR"
 
-    # Dependencias de producción
-    info "Instalando npm --production..."
+    info "Instalando dependencias npm (producción)..."
     sudo -u "$SERVICE_USER" npm install --production --prefix "$INSTALL_DIR" --silent \
         || sudo -u "$SERVICE_USER" npm install --production --prefix "$INSTALL_DIR" 2>&1 | tail -5
     ok "npm install completado"
 
-    # Directorio uploads
     mkdir -p "$INSTALL_DIR/public/uploads"
     chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR/public/uploads"
     ok "Directorio uploads listo"
@@ -243,38 +225,93 @@ SVCEOF
     sleep 2
 
     if systemctl is-active --quiet print-server; then
-        ok "Servicio print-server activo y habilitado"
+        ok "Servicio print-server activo y habilitado al inicio"
     else
-        warn "El servicio no arrancó correctamente."
-        warn "Revisa los logs: sudo journalctl -u print-server -n 40"
+        warn "El servicio no arrancó. Revisa: sudo journalctl -u print-server -n 40"
     fi
 }
 
 # =============================================================================
-# WIFI ACCESS POINT
+# WIFI ACCESS POINT + PORTAL CAUTIVO
 # =============================================================================
 
 detect_wifi_iface() {
     local detected
-    detected=$(iw dev 2>/dev/null | awk '$1=="Interface"{print $2}' | head -1)
+    detected=$(iw dev 2>/dev/null | awk '$1=="Interface"{print $2}' | head -1) || true
+
     if [[ -n "$detected" ]]; then
         WIFI_IFACE="$detected"
         info "Interfaz WiFi detectada: ${BOLD}$WIFI_IFACE${NC}"
         local confirm
         read -rp "  ¿Usar esta interfaz? [S/n]: " confirm
-        if [[ "$confirm" =~ ^[Nn]$ ]]; then
-            ask "Interfaz WiFi: " WIFI_IFACE
-        fi
+        [[ "$confirm" =~ ^[Nn]$ ]] && read -rp "  Interfaz WiFi: " WIFI_IFACE
     else
         warn "No se detectó interfaz WiFi automáticamente."
-        askd "Interfaz WiFi" WIFI_IFACE
+        read -rp "  Ingresa la interfaz WiFi (ej. wlan0): " WIFI_IFACE
     fi
 
-    # Verificar soporte para modo AP
-    if ! iw list 2>/dev/null | grep -q "AP"; then
-        warn "No se pudo confirmar soporte de modo AP en la tarjeta."
-        warn "Continúa si estás seguro de que la tarjeta lo soporta."
-    fi
+    iw list 2>/dev/null | grep -q "AP" \
+        || warn "No se pudo confirmar soporte de modo AP — continúa si estás seguro."
+}
+
+ask_wifi_password() {
+    echo
+    info "Seguridad WiFi — WPA2 activado por defecto"
+    echo
+    echo "  Ingresa la contraseña WPA2 (mín. 8 caracteres)."
+    echo "  Para crear una red ABIERTA (sin contraseña), deja el campo vacío"
+    echo -e "  y escribe ${BOLD}ABIERTA${NC} cuando se te pida confirmar."
+    echo
+
+    while true; do
+        read -rsp "  Contraseña WPA2: " WIFI_PASS; echo
+
+        if [[ -z "$WIFI_PASS" ]]; then
+            local confirm_open
+            read -rp "  ¿Confirmas red ABIERTA sin contraseña? [escribe ABIERTA para confirmar]: " confirm_open
+            if [[ "$confirm_open" == "ABIERTA" ]]; then
+                OPEN_NETWORK="yes"
+                warn "Red configurada SIN contraseña (red abierta)."
+                break
+            else
+                warn "Cancelado. Ingresa una contraseña WPA2 o escribe ABIERTA para red abierta."
+            fi
+        elif (( ${#WIFI_PASS} < 8 )); then
+            warn "La contraseña WPA2 debe tener al menos 8 caracteres."
+        else
+            OPEN_NETWORK="no"
+            ok "Contraseña WPA2 aceptada."
+            break
+        fi
+    done
+}
+
+setup_captive_portal() {
+    hr; info "Configurando portal cautivo (iptables)..."
+
+    # Redirigir TODO el tráfico HTTP (puerto 80) entrante por la interfaz WiFi
+    # al puerto del servidor Node.js. Así cualquier request HTTP del dispositivo
+    # llega al servidor aunque el usuario escriba cualquier URL.
+    #
+    # El dispositivo detecta respuesta inesperada en sus URLs de "connectivity check"
+    # y muestra automáticamente el popup/notificación de portal cautivo.
+
+    # Limpiar regla previa si existe (idempotente)
+    iptables -t nat -D PREROUTING \
+        -i "$WIFI_IFACE" -p tcp --dport 80 -j REDIRECT --to-port "$PORT" 2>/dev/null || true
+
+    # Agregar regla
+    iptables -t nat -A PREROUTING \
+        -i "$WIFI_IFACE" -p tcp --dport 80 -j REDIRECT --to-port "$PORT"
+    ok "iptables: puerto 80 → $PORT en $WIFI_IFACE"
+
+    # Guardar reglas para que persistan tras reinicio
+    netfilter-persistent save >/dev/null 2>&1
+    ok "Reglas iptables guardadas (persisten al reiniciar)"
+
+    # Habilitar el servicio de restauración al inicio
+    systemctl enable netfilter-persistent --quiet
+    ok "netfilter-persistent habilitado al inicio"
 }
 
 setup_wifi_ap() {
@@ -282,10 +319,10 @@ setup_wifi_ap() {
     echo
 
     detect_wifi_iface
-    askd "SSID (nombre de la red)" SSID
-    read -rsp "  Contraseña WiFi (Enter = red abierta): " WIFI_PASS; echo
+    askd "SSID (nombre de la red WiFi)" SSID
+    ask_wifi_password
 
-    # ── Netplan ──────────────────────────────────────────────────────────────
+    # ── Netplan: IP estática en la interfaz WiFi ──────────────────────────────
     local NETPLAN_FILE="/etc/netplan/99-print-server-ap.yaml"
     cat > "$NETPLAN_FILE" <<NPEOF
 network:
@@ -294,14 +331,14 @@ network:
     ${WIFI_IFACE}:
       dhcp4: false
       addresses:
-        - ${WIFI_IP}/24
+        - ${WIFI_IP}/${WIFI_MASK}
       access-points: {}
 NPEOF
     chmod 600 "$NETPLAN_FILE"
     netplan apply 2>/dev/null || netplan apply
-    ok "Netplan aplicado — $WIFI_IFACE → $WIFI_IP"
+    ok "Netplan: $WIFI_IFACE → $WIFI_IP/$WIFI_MASK"
 
-    # ── hostapd ──────────────────────────────────────────────────────────────
+    # ── hostapd ───────────────────────────────────────────────────────────────
     cat > /etc/hostapd/hostapd.conf <<HEOF
 interface=${WIFI_IFACE}
 driver=nl80211
@@ -310,45 +347,61 @@ hw_mode=g
 channel=7
 wmm_enabled=0
 macaddr_acl=0
-auth_algs=1
 ignore_broadcast_ssid=0
 HEOF
 
-    if [[ -n "$WIFI_PASS" ]]; then
+    if [[ "$OPEN_NETWORK" == "yes" ]]; then
+        # Red abierta: auth_algs=1 sin bloque WPA
+        echo "auth_algs=1" >> /etc/hostapd/hostapd.conf
+        ok "hostapd: red abierta (sin contraseña)"
+    else
+        # WPA2 Personal
         cat >> /etc/hostapd/hostapd.conf <<HEOF2
-
+auth_algs=1
 wpa=2
 wpa_passphrase=${WIFI_PASS}
 wpa_key_mgmt=WPA-PSK
 wpa_pairwise=CCMP
+rsn_pairwise=CCMP
 HEOF2
-        ok "hostapd configurado con WPA2"
-    else
-        ok "hostapd configurado (red abierta)"
+        ok "hostapd: WPA2 activado"
     fi
 
     # Apuntar hostapd a su conf
     if [[ -f /etc/default/hostapd ]]; then
-        sed -i 's|^#\?DAEMON_CONF=.*|DAEMON_CONF="/etc/hostapd/hostapd.conf"|' /etc/default/hostapd
+        sed -i 's|^#\?DAEMON_CONF=.*|DAEMON_CONF="/etc/hostapd/hostapd.conf"|' \
+            /etc/default/hostapd
     else
         echo 'DAEMON_CONF="/etc/hostapd/hostapd.conf"' > /etc/default/hostapd
     fi
 
-    # ── dnsmasq ───────────────────────────────────────────────────────────────
+    # ── dnsmasq: DHCP + DNS cautivo ───────────────────────────────────────────
+    # address=/#/IP  →  TODOS los dominios resuelven a nuestro servidor.
+    # Esto activa la detección de portal cautivo en Android, iOS, macOS y Windows.
     [[ -f /etc/dnsmasq.conf ]] && mv /etc/dnsmasq.conf /etc/dnsmasq.conf.backup
     cat > /etc/dnsmasq.conf <<DMEOF
-# Print Server — dnsmasq config
+# Print Server — dnsmasq (DHCP + portal cautivo)
 interface=${WIFI_IFACE}
 bind-interfaces
-dhcp-range=192.168.4.10,192.168.4.100,255.255.255.0,24h
+
+# DHCP: asigna IPs a los dispositivos conectados
+dhcp-range=${DHCP_START},${DHCP_END},255.255.255.0,8h
+
+# Portal cautivo: todos los dominios resuelven al servidor
+# El sistema operativo detecta respuesta inesperada y abre el browser
+address=/#/${WIFI_IP}
+
+# Dominios amigables directos
 address=/foto.local/${WIFI_IP}
 address=/print.local/${WIFI_IP}
+
+# Sin reenvío DNS al exterior (red offline)
 no-resolv
 no-poll
 DMEOF
-    ok "dnsmasq configurado (DHCP + DNS local)"
+    ok "dnsmasq: DHCP $DHCP_START–$DHCP_END + DNS cautivo (address=/#/)"
 
-    # Habilitar e iniciar
+    # ── Habilitar e iniciar servicios ─────────────────────────────────────────
     systemctl unmask hostapd --quiet 2>/dev/null || true
     systemctl enable hostapd dnsmasq --quiet
     systemctl restart hostapd dnsmasq
@@ -361,24 +414,44 @@ DMEOF
     systemctl is-active --quiet dnsmasq \
         && ok "dnsmasq activo" \
         || warn "dnsmasq no arrancó: sudo systemctl status dnsmasq"
+
+    # Configurar portal cautivo (iptables)
+    setup_captive_portal
 }
 
 # =============================================================================
-# RESUMEN FINAL
+# RESUMEN FINAL + VERIFICACIÓN DE ARRANQUE AUTOMÁTICO
 # =============================================================================
 
 show_summary() {
     hr
     echo -e "${BOLD}${GREEN}  Instalación completada${NC}"
     hr
-    printf "  %-18s ${BOLD}http://%s:%s${NC}\n"      "Portal alumnos:" "$WIFI_IP" "$PORT"
-    printf "  %-18s ${BOLD}http://%s:%s/gallery${NC}\n" "Galería:"        "$WIFI_IP" "$PORT"
-    printf "  %-18s ${BOLD}http://%s:%s/admin${NC}\n"   "Panel admin:"    "$WIFI_IP" "$PORT"
-    printf "  %-18s ${BOLD}http://foto.local${NC}  (con AP activo)\n" "Dominio local:"
-    printf "  %-18s ${BOLD}http://%s:631${NC}\n"        "CUPS:"           "$WIFI_IP"
+    printf "  %-20s ${BOLD}http://%s${NC}  (o http://%s:%s)\n" \
+        "Portal alumnos:" "foto.local" "$WIFI_IP" "$PORT"
+    printf "  %-20s ${BOLD}http://%s/gallery${NC}\n"  "Galería:"    "foto.local"
+    printf "  %-20s ${BOLD}http://%s/admin${NC}\n"    "Panel admin:" "foto.local"
+    printf "  %-20s ${BOLD}http://%s:631${NC}\n"      "CUPS:"        "$WIFI_IP"
+    echo
+    hr
+    echo -e "  ${BOLD}Servicios habilitados al inicio (arranque automático):${NC}"
+    echo
+    for svc in print-server hostapd dnsmasq cups netfilter-persistent; do
+        if systemctl is-enabled --quiet "$svc" 2>/dev/null; then
+            printf "  ${GREEN}✔${NC}  %-24s habilitado\n" "$svc"
+        else
+            printf "  ${YELLOW}⚠${NC}  %-24s NO habilitado\n" "$svc"
+        fi
+    done
+    echo
+    echo "  Al reiniciar el servidor:"
+    echo "   • El WiFi AP arranca automáticamente (hostapd + dnsmasq)"
+    echo "   • Las reglas iptables del portal cautivo se restauran (netfilter-persistent)"
+    echo "   • El servidor Node.js arranca automáticamente (print-server.service)"
+    echo "   • Todo listo sin intervención manual."
     echo
     echo -e "  Logs:   ${BOLD}sudo journalctl -u print-server -f${NC}"
-    echo -e "  Estado: ${BOLD}sudo systemctl status print-server${NC}"
+    echo -e "  Estado: ${BOLD}sudo systemctl status print-server hostapd dnsmasq${NC}"
     hr
 }
 
@@ -392,12 +465,12 @@ main() {
 
     clear
     echo
-    echo -e "  ${BOLD}Print Server — Instalación${NC}"
+    echo -e "  ${BOLD}Print Server — Script de instalación${NC}"
     echo -e "  Electivo de Fotografía y Multimedia"
     hr
-    echo "  [1]  Instalación completa     (deps + servidor + WiFi AP)"
+    echo "  [1]  Instalación completa     (deps + servidor + WiFi AP + portal cautivo)"
     echo "  [2]  Solo servidor            (sin WiFi AP)"
-    echo "  [3]  Solo WiFi AP             (asume servidor ya desplegado)"
+    echo "  [3]  Solo WiFi AP + portal    (asume servidor ya desplegado)"
     echo "  [4]  Solo dependencias        (Node.js, CUPS, build tools)"
     echo "  [5]  Actualizar servidor      (recopia archivos y reinicia)"
     echo "  [6]  Reconfigurar .env        (nueva contraseña / impresora)"
@@ -424,11 +497,12 @@ main() {
             setup_systemd
             hr
             ok "Servidor listo en http://localhost:${PORT}"
-            warn "WiFi AP no configurado. Conectarse por la red local."
+            warn "WiFi AP no configurado — conéctate por la red local."
             ;;
         3)
             install_wifi_deps
             setup_wifi_ap
+            show_summary
             ;;
         4)
             install_system_deps
@@ -441,7 +515,6 @@ main() {
             ;;
         6)
             configure_env
-            # Copiar solo el .env actualizado
             cp "$PROJECT_DIR/.env" "$INSTALL_DIR/.env"
             chown "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR/.env"
             systemctl restart print-server

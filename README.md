@@ -169,7 +169,12 @@ El script se encarga de:
 - Crear el archivo `.env` con todos los valores
 - Crear el usuario `print-server` y copiar el proyecto a `/opt/print-server`
 - Configurar el servicio systemd con arranque automático
-- Configurar el WiFi AP (hostapd + dnsmasq + netplan)
+- Configurar el WiFi AP (hostapd + dnsmasq + netplan) con IP `192.168.1.10`
+- Activar **WPA2 por defecto** (con opción explícita a red abierta)
+- Configurar **portal cautivo**: DNS wildcard + iptables redirige puerto 80 → 3000, para que al conectar al WiFi el dispositivo abra automáticamente el portal
+- Guardar reglas iptables con `netfilter-persistent` para que persistan tras reinicios
+
+Todo queda habilitado al inicio: `print-server`, `hostapd`, `dnsmasq`, `cups` y `netfilter-persistent` se inician automáticamente sin intervención manual.
 
 ---
 
