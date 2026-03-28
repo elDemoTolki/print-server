@@ -64,6 +64,34 @@
       white-space: nowrap;
     }
 
+    /* Report bar */
+    .report-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 24px;
+      padding: 14px 16px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+    .report-bar label {
+      font-size: 0.8rem;
+      color: var(--muted-2);
+      white-space: nowrap;
+    }
+    .report-bar input[type="date"] {
+      padding: 8px 12px;
+      font-size: 0.875rem;
+      width: auto;
+      min-width: 140px;
+      color-scheme: dark;
+    }
+    .theme-sakura .report-bar input[type="date"] {
+      color-scheme: light;
+    }
+
     /* Delete button */
     .btn-delete {
       background: transparent;
@@ -130,6 +158,15 @@
           <option value="">Todos los meses</option>
         </select>
         <span class="filter-count" id="filter-count"></span>
+      </div>
+
+      <!-- Report bar -->
+      <div class="report-bar">
+        <label for="report-from">Informe:</label>
+        <input type="date" id="report-from" />
+        <label for="report-to">al</label>
+        <input type="date" id="report-to" />
+        <button class="btn btn-secondary" id="report-btn" style="height:38px;padding:0 18px;font-size:0.875rem">⬇ Exportar HTML</button>
       </div>
 
       <!-- Desktop: table -->
@@ -471,6 +508,32 @@
       document.body.style.overflow = '';
       setTimeout(() => { lbImg.src = ''; }, 250);
     }
+
+    // ── Report ────────────────────────────────
+    (function () {
+      const fromInput = document.getElementById('report-from');
+      const toInput   = document.getElementById('report-to');
+      const reportBtn = document.getElementById('report-btn');
+
+      function todayChile() {
+        return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' });
+      }
+
+      const today = todayChile();
+      fromInput.value = today;
+      toInput.value   = today;
+
+      reportBtn.addEventListener('click', () => {
+        const from = fromInput.value;
+        const to   = toInput.value;
+        if (!from || !to) return;
+        if (from > to) {
+          alert('La fecha inicial no puede ser posterior a la fecha final.');
+          return;
+        }
+        window.location.href = `/admin/report?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+      });
+    })();
 
     lbClose.addEventListener('click', closeLb);
     lbBackdrop.addEventListener('click', closeLb);

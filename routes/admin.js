@@ -2,11 +2,209 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const bcrypt = require('bcrypt');
+const sharp = require('sharp');
 const config = require('../config');
 const db = require('../db/database');
 const { requireAdmin } = require('../middleware/auth');
 const printRouter = require('./print');
 const { broadcast } = require('./events');
+
+// ── Report helpers ────────────────────────────────────────────────────────────
+
+const MESES_ES = ['enero','febrero','marzo','abril','mayo','junio',
+                  'julio','agosto','septiembre','octubre','noviembre','diciembre'];
+
+function escHtmlReport(str) {
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function fmtDateLabel(dateStr) {
+  const [y, m, d] = dateStr.split('-');
+  return `${parseInt(d)} de ${MESES_ES[parseInt(m,10)-1]} de ${y}`;
+}
+
+function fmtDateTimeChile(str) {
+  const utc = str.includes('Z') || str.includes('+')
+    ? str : str.replace(' ', 'T') + 'Z';
+  return new Date(utc).toLocaleString('es-CL', {
+    timeZone: 'America/Santiago',
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  });
+}
+
+function buildReportHtml(jobs, from, to) {
+  const dateLabel = from === to
+    ? fmtDateLabel(from)
+    : `${fmtDateLabel(from)} al ${fmtDateLabel(to)}`;
+
+  const generatedAt = new Date().toLocaleString('es-CL', {
+    timeZone: 'America/Santiago',
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  });
+
+  const cards = jobs.map(job => `
+    <div class="card">
+      ${job.base64
+        ? `<img src="${job.base64}" alt="${escHtmlReport(job.alumno)}" />`
+        : `<div class="no-img">Imagen no disponible</div>`}
+      <div class="card-info">
+        <p class="card-name">${escHtmlReport(job.alumno)}</p>
+        <p class="card-course">${escHtmlReport(job.curso)}</p>
+        <p class="card-date">${fmtDateTimeChile(job.uploaded_at)}</p>
+      </div>
+    </div>`).join('\n');
+
+  const emptyState = jobs.length === 0
+    ? `<div class="empty">No hay fotos en este período.</div>` : '';
+
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Informe — ${escHtmlReport(dateLabel)}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: #f2f2f2;
+      color: #1a1a1a;
+      -webkit-font-smoothing: antialiased;
+    }
+    .report-header {
+      background: #111;
+      color: #fff;
+      padding: 36px 24px 32px;
+      text-align: center;
+    }
+    .report-header .eyebrow {
+      font-size: 0.7rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #777;
+      margin-bottom: 10px;
+    }
+    .report-header h1 {
+      font-size: clamp(1.4rem, 3vw, 2.2rem);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+    }
+    .report-header .date-label {
+      color: #f0c040;
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+    .report-header .total {
+      display: inline-block;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.12);
+      color: #aaa;
+      font-size: 0.82rem;
+      padding: 4px 14px;
+      border-radius: 100px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 20px;
+      padding: 28px 20px;
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+    .card {
+      background: #fff;
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+    }
+    .card img {
+      width: 100%;
+      display: block;
+      max-height: 380px;
+      object-fit: contain;
+      background: #f6f6f6;
+    }
+    .no-img {
+      width: 100%;
+      height: 200px;
+      background: #eee;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #bbb;
+      font-size: 0.85rem;
+    }
+    .card-info {
+      padding: 14px 16px 16px;
+      border-top: 1px solid #f0f0f0;
+    }
+    .card-name {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 3px;
+    }
+    .card-course {
+      font-size: 0.82rem;
+      color: #888;
+      margin-bottom: 6px;
+    }
+    .card-date {
+      font-size: 0.76rem;
+      color: #bbb;
+    }
+    .empty {
+      text-align: center;
+      padding: 60px 20px;
+      color: #aaa;
+      font-size: 1rem;
+    }
+    .report-footer {
+      text-align: center;
+      padding: 28px;
+      color: #ccc;
+      font-size: 0.76rem;
+      border-top: 1px solid #e4e4e4;
+      margin-top: 8px;
+    }
+    @media (max-width: 480px) {
+      .grid { grid-template-columns: 1fr; gap: 14px; padding: 16px; }
+    }
+    @media print {
+      body { background: #fff; }
+      .report-header {
+        background: #111 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .report-header .date-label { color: #f0c040 !important; }
+      .grid { gap: 14px; padding: 12px; }
+      .card { break-inside: avoid; box-shadow: none; border: 1px solid #ddd; }
+    }
+  </style>
+</head>
+<body>
+  <div class="report-header">
+    <p class="eyebrow">Electivo de Fotografía y Multimedia</p>
+    <h1>Informe Fotográfico</h1>
+    <p class="date-label">${escHtmlReport(dateLabel)}</p>
+    <span class="total">${jobs.length} ${jobs.length === 1 ? 'foto' : 'fotos'}</span>
+  </div>
+
+  <div class="grid">${cards}</div>
+  ${emptyState}
+
+  <div class="report-footer">
+    Generado el ${escHtmlReport(generatedAt)}
+  </div>
+</body>
+</html>`;
+}
 
 const router = express.Router();
 
@@ -67,6 +265,40 @@ router.delete('/jobs/:id', requireAdmin, (req, res) => {
   db.deleteJob(id);
   broadcast('delete-photo', { id });
   return res.json({ success: true });
+});
+
+router.get('/report', requireAdmin, async (req, res) => {
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' });
+  const from = req.query.from || today;
+  const to   = req.query.to   || today;
+
+  if (!from.match(/^\d{4}-\d{2}-\d{2}$/) || !to.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    return res.status(400).send('Fechas inválidas.');
+  }
+
+  const jobs = db.getJobsByDateRange(from, to);
+
+  const jobsWithImages = await Promise.all(jobs.map(async (job) => {
+    const filePath = path.join(config.uploadDir, job.filename);
+    try {
+      const buf = await sharp(filePath)
+        .resize({ width: 800, withoutEnlargement: true })
+        .jpeg({ quality: 82 })
+        .toBuffer();
+      return { ...job, base64: `data:image/jpeg;base64,${buf.toString('base64')}` };
+    } catch {
+      return { ...job, base64: null };
+    }
+  }));
+
+  const html = buildReportHtml(jobsWithImages, from, to);
+  const filename = from === to
+    ? `informe-${from}.html`
+    : `informe-${from}-al-${to}.html`;
+
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(html);
 });
 
 router.use('/print', printRouter);

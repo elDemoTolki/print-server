@@ -59,6 +59,15 @@ function getAdminJobs() {
   }));
 }
 
+function getJobsByDateRange(from, to) {
+  // date() en SQLite maneja tanto "YYYY-MM-DD HH:MM:SS" como "YYYY-MM-DDTHH:MM:SSZ"
+  return db.prepare(
+    'SELECT id, filename, alumno, curso, uploaded_at FROM jobs ' +
+    'WHERE date(uploaded_at) >= ? AND date(uploaded_at) <= ? ' +
+    'ORDER BY uploaded_at ASC'
+  ).all(from, to);
+}
+
 function deleteJob(id) {
   db.prepare('DELETE FROM print_log WHERE job_id = ?').run(id);
   db.prepare('DELETE FROM jobs WHERE id = ?').run(id);
@@ -75,4 +84,5 @@ module.exports = {
   getGalleryJobs,
   getAdminJobs,
   deleteJob,
+  getJobsByDateRange,
 };
