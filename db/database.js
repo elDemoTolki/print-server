@@ -35,7 +35,7 @@ function createJob({ filename, original_name, alumno, curso }) {
 }
 
 function incrementPrintCount(id) {
-  db.prepare('UPDATE jobs SET print_count = print_count + 1, status = "printed" WHERE id = ?').run(id);
+  db.prepare("UPDATE jobs SET print_count = print_count + 1, status = 'printed' WHERE id = ?").run(id);
 }
 
 function logPrint(jobId) {
