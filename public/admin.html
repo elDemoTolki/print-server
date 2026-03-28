@@ -163,6 +163,19 @@
     </main>
   </div>
 
+  <!-- Lightbox -->
+  <div class="lb" id="lb" role="dialog" aria-modal="true">
+    <div class="lb-backdrop" id="lb-backdrop"></div>
+    <div class="lb-content">
+      <button class="lb-close" id="lb-close" aria-label="Cerrar">✕</button>
+      <img class="lb-img" id="lb-img" alt="" />
+      <div class="lb-caption" id="lb-caption"></div>
+      <div class="lb-counter" id="lb-counter"></div>
+    </div>
+  </div>
+  <button class="lb-nav lb-prev" id="lb-prev" aria-label="Anterior" style="display:none">&#8592;</button>
+  <button class="lb-nav lb-next" id="lb-next" aria-label="Siguiente" style="display:none">&#8594;</button>
+
   <script>
     const tableBody  = document.getElementById('jobs-table-body');
     const cardsWrap  = document.getElementById('jobs-cards');
@@ -283,7 +296,7 @@
         const tr = document.createElement('tr');
         tr.dataset.id = job.id;
         tr.innerHTML = `
-          <td><img class="thumb" src="${thumb}" alt="${escHtml(job.alumno)}" loading="lazy" /></td>
+          <td><div class="thumb-wrap"><img class="thumb" src="${thumb}" alt="${escHtml(job.alumno)}" loading="lazy" /></div></td>
           <td class="text-muted">${job.id}</td>
           <td>
             <div class="job-name">${escHtml(job.alumno)}</div>
@@ -291,7 +304,7 @@
           </td>
           <td class="job-date">${fmtDate(job.uploaded_at)}</td>
           <td>${badgeHtml(job.status)}</td>
-          <td class="print-count"><strong>${job.print_count}</strong>×</td>
+          <td><span class="print-count"><strong>${job.print_count}</strong>×</span></td>
           <td>
             <div class="actions-cell">
               <button class="btn btn-print" data-action="print">🖨 Imprimir</button>
@@ -305,6 +318,9 @@
         tr.querySelector('[data-action="delete"]').addEventListener('click', function() {
           deleteJob(job.id, job.alumno, this);
         });
+        tr.querySelector('.thumb-wrap').addEventListener('click', () => {
+          openLb(jobs.indexOf(job));
+        });
         tableBody.appendChild(tr);
 
         // ── Mobile card ──
@@ -312,7 +328,7 @@
         card.className = 'job-card fade-up';
         card.dataset.id = job.id;
         card.innerHTML = `
-          <img class="thumb" src="${thumb}" alt="${escHtml(job.alumno)}" loading="lazy" />
+          <div class="thumb-wrap"><img class="thumb" src="${thumb}" alt="${escHtml(job.alumno)}" loading="lazy" /></div>
           <div class="info" style="flex:1;min-width:0">
             <div class="name">${escHtml(job.alumno)}</div>
             <div class="meta">${escHtml(job.curso)} · ${fmtDate(job.uploaded_at)}</div>
@@ -331,6 +347,9 @@
         });
         card.querySelector('[data-action="delete"]').addEventListener('click', function() {
           deleteJob(job.id, job.alumno, this);
+        });
+        card.querySelector('.thumb-wrap').addEventListener('click', () => {
+          openLb(jobs.indexOf(job));
         });
         cardsWrap.appendChild(card);
       });
@@ -369,6 +388,60 @@
     });
 
     loadJobs();
+
+    // ── Lightbox ──────────────────────────────
+    const lb        = document.getElementById('lb');
+    const lbImg     = document.getElementById('lb-img');
+    const lbCaption = document.getElementById('lb-caption');
+    const lbCounter = document.getElementById('lb-counter');
+    const lbClose   = document.getElementById('lb-close');
+    const lbBackdrop = document.getElementById('lb-backdrop');
+    const lbPrev    = document.getElementById('lb-prev');
+    const lbNext    = document.getElementById('lb-next');
+    let   lbIndex   = 0;
+    let   lbJobs    = [];   // snapshot de jobs al abrir
+
+    function showLbPhoto(idx) {
+      const job = lbJobs[idx];
+      if (!job) return;
+      lbIndex = idx;
+      lbImg.classList.add('loading');
+      const img = new Image();
+      img.onload = () => { lbImg.src = img.src; lbImg.classList.remove('loading'); };
+      img.src = `/uploads/${job.filename}`;
+      lbImg.alt = `${job.alumno} — ${job.curso}`;
+      lbCaption.innerHTML = `${escHtml(job.alumno)} <span>· ${escHtml(job.curso)}</span>`;
+      lbCounter.textContent = `${idx + 1} / ${lbJobs.length}`;
+      lbPrev.disabled = idx === 0;
+      lbNext.disabled = idx === lbJobs.length - 1;
+    }
+
+    function openLb(idx) {
+      lbJobs = getFiltered();   // usa los jobs filtrados actuales
+      lbPrev.style.display = lbNext.style.display = 'flex';
+      showLbPhoto(idx);
+      lb.classList.add('open');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeLb() {
+      lb.classList.remove('open');
+      lbPrev.style.display = lbNext.style.display = 'none';
+      document.body.style.overflow = '';
+      setTimeout(() => { lbImg.src = ''; }, 250);
+    }
+
+    lbClose.addEventListener('click', closeLb);
+    lbBackdrop.addEventListener('click', closeLb);
+    lbPrev.addEventListener('click', () => { if (lbIndex > 0) showLbPhoto(lbIndex - 1); });
+    lbNext.addEventListener('click', () => { if (lbIndex < lbJobs.length - 1) showLbPhoto(lbIndex + 1); });
+
+    document.addEventListener('keydown', (e) => {
+      if (!lb.classList.contains('open')) return;
+      if (e.key === 'Escape')     closeLb();
+      if (e.key === 'ArrowLeft'  && lbIndex > 0)               showLbPhoto(lbIndex - 1);
+      if (e.key === 'ArrowRight' && lbIndex < lbJobs.length - 1) showLbPhoto(lbIndex + 1);
+    });
   </script>
 
   <button class="theme-toggle" id="theme-toggle" title="Cambiar tema">
