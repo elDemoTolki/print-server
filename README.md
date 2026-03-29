@@ -497,6 +497,29 @@ curl -b cookies.txt "http://localhost:3000/admin/report?from=2025-01-01&to=2025-
 lpq -P Brother-DCP-L3551CDW
 ```
 
+## Cambiar de impresora
+
+El servidor usa **IPP Everywhere (driverless)**, por lo que cualquier impresora Brother moderna funciona sin instalar drivers adicionales. Solo cambia el nombre en CUPS y en el `.env`.
+
+```bash
+# 1. Conectar la nueva impresora por USB y verificar el nombre asignado
+lpstat -p
+
+# 2. Registrarla en CUPS (si no aparece sola)
+sudo lpadmin -p NUEVAIMPRESORA \
+    -v "ipp://Brother%20NombreModelo%20series%20(USB)._ipp._tcp.local/" \
+    -m everywhere \
+    -E
+
+# 3. Actualizar el .env con el nuevo nombre
+sudo bash scripts/setup.sh  # → [6] Reconfigurar .env
+# Cuando pregunte el nombre de la impresora, escribir el que apareció en lpstat -p
+```
+
+> El URI exacto para el paso 2 se obtiene con `sudo lpinfo -v | grep -i usb` tras conectar la impresora.
+
+---
+
 ## Notas
 
 - `UPLOAD_DIR` debe apuntar a `public/uploads` para que las imágenes sean servidas por Express.
