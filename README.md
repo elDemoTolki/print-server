@@ -4,11 +4,13 @@ Servidor local para el electivo de fotografía y multimedia escolar. Permite a l
 
 - Node.js 20 + Express 4
 - SQLite con `better-sqlite3`
-- Carga de fotos desde dispositivo móvil
+- Carga de fotos desde dispositivo móvil (alumnos) y desde el panel admin (profesora)
 - Galería pública en tiempo real con SSE
-- Panel administrador con impresión por CUPS y eliminación de fotos
-- Diseño responsive (mobile-first), dark theme
-- WiFi AP local y servicio systemd para arranque automático
+- Panel administrador: impresión, eliminación, exportación de reportes y subida de fotos
+- Selección de tamaño de impresión al momento de imprimir (20×15 cm / 10×7 cm)
+- Impresión driverless vía **IPP Everywhere** (sin drivers específicos por modelo)
+- WiFi AP local con **WPA2**, **portal cautivo** y servicio systemd para arranque automático
+- Diseño responsive (mobile-first), dark theme / tema Sakura
 
 ## Estructura de carpetas
 
@@ -156,12 +158,13 @@ Opciones del menú:
 
 | Opción | Descripción |
 |--------|-------------|
-| `[1]` | Instalación completa (deps + servidor + WiFi AP) |
+| `[1]` | Instalación completa (deps + servidor + WiFi AP + portal cautivo) |
 | `[2]` | Solo servidor (sin WiFi AP) |
-| `[3]` | Solo WiFi AP |
+| `[3]` | Solo WiFi AP + portal cautivo |
 | `[4]` | Solo dependencias del sistema |
 | `[5]` | Actualizar servidor (recopia archivos y reinicia) |
 | `[6]` | Reconfigurar `.env` (nueva contraseña / impresora) |
+| `[7]` | Configurar impresora (detectar USB, registrar en CUPS y actualizar `.env`) |
 
 El script se encarga de:
 - Instalar Node.js 20, CUPS y herramientas de compilación
@@ -264,6 +267,7 @@ npm start
 
 ### `public/admin.html` — Panel de administración
 - Saludo personalizado al profesor
+- **Sección "Subir foto de la profesora"** → sube imagen registrada automáticamente como `Nicol Valencia / Profesora`
 - Filtro por nombre de alumno, por curso y por mes (se aplica en tiempo real)
 - Rango de fechas y botón **Exportar reporte** → descarga tabla HTML con todos los filtros aplicados, apta para Excel
 - Contador de trabajos con indicador de filtro activo
@@ -271,7 +275,7 @@ npm start
 - Vista adaptativa:
   - **Desktop**: tabla con miniatura, nombre, curso, fecha, estado, impresiones y acciones
   - **Mobile**: tarjetas con miniatura y acciones
-- Botón **Imprimir** → envía a CUPS
+- Botón **Imprimir** → abre modal de selección de tamaño (20×15 cm / 10×7 cm) antes de enviar a CUPS
 - Botón **Eliminar** → pide confirmación, borra archivo y registro, actualiza sin recargar
 - Indicador de conexión SSE (punto verde/amarillo)
 - Se actualiza automáticamente ante eventos: `new-photo`, `print-update`, `delete-photo`
@@ -289,14 +293,26 @@ npm start
 
 ## Mecanismo de impresión
 
-`routes/print.js` ejecuta:
+`POST /admin/print/:id` acepta un body JSON con el campo `size`:
 
-```bash
-lp -d "<PRINTER_NAME>" -o media=A4 -o fit-to-page "<filePath>"
+```json
+{ "size": "20x15" }
 ```
 
+`routes/print.js` mapea el tamaño a la media CUPS y ejecuta:
+
+```bash
+lp -d "<PRINTER_NAME>" -o media=<MEDIA> -o fit-to-page "<filePath>"
+```
+
+| `size` | Media CUPS | Dimensiones |
+|--------|-----------|-------------|
+| `20x15` | `Custom.200x150mm` | 20×15 cm |
+| `10x7`  | `Custom.100x70mm`  | 10×7 cm |
+| _(sin body)_ | `4x6` | 10×15 cm (fallback) |
+
 Post impresión:
-- `incrementPrintCount(id)` → status `"printed"`
+- `incrementPrintCount(id)` → `status = 'printed'`
 - `logPrint(id)`
 - `broadcast('print-update', { id, print_count, status })`
 
@@ -314,133 +330,31 @@ Para agregar o cambiar cursos, editar los `<option>` en los tres archivos HTML.
 - Middleware global 404 + 500 en `server.js`
 - Errores de multer manejados en `upload.js` (tamaño, tipo de archivo)
 
-## Opción deployment: service systemd + WiFi AP
+## Deployment: arranque automático
 
-### 1) Service systemd (`/etc/systemd/system/print-server.service`)
+Todo el deployment se configura con el script `[1]` o `[2]`. Los servicios que quedan habilitados al inicio:
 
-```ini
-[Unit]
-Description=Print Server - Electivo de Fotografía y Multimedia
-After=network.target cups.service
-Wants=cups.service
+| Servicio | Función |
+|---|---|
+| `print-server` | Servidor Node.js (systemd) |
+| `hostapd` | WiFi Access Point |
+| `dnsmasq` | DHCP + DNS del portal cautivo |
+| `cups` | Sistema de impresión |
+| `netfilter-persistent` | Restaura reglas iptables (portal cautivo) |
 
-[Service]
-Type=simple
-User=print-server
-WorkingDirectory=/opt/print-server
-ExecStart=/usr/bin/node server.js
-Restart=on-failure
-RestartSec=5
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=print-server
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Crear usuario:
+Verificar estado de todos los servicios:
 
 ```bash
-sudo useradd -r -s /bin/false print-server
-sudo mkdir -p /opt/print-server
-sudo chown -R print-server:print-server /opt/print-server
-sudo usermod -aG lp print-server
+for svc in print-server hostapd dnsmasq cups netfilter-persistent; do
+    printf "%-24s %s\n" "$svc" "$(systemctl is-active $svc)"
+done
 ```
 
-Copiar proyecto e instalar dependencias:
+Ver logs del servidor:
 
 ```bash
-sudo cp -r /ruta/del/proyecto/* /opt/print-server/
-sudo chown -R print-server:print-server /opt/print-server
-cd /opt/print-server
-sudo -u print-server npm install --production
-```
-
-Habilitar e iniciar:
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable print-server
-sudo systemctl start print-server
-sudo systemctl status print-server
 sudo journalctl -u print-server -f
 ```
-
-### 2) WiFi AP (hostapd + dnsmasq)
-
-Instalar:
-
-```bash
-sudo apt install hostapd dnsmasq
-iw list | grep "Supported interface modes" -A 10
-```
-
-Configurar IP y netplan:
-
-```yaml
-network:
-  version: 2
-  ethernets:
-    eth0: { dhcp4: true }
-  wifis:
-    wlan0:
-      dhcp4: false
-      addresses: [192.168.4.1/24]
-      access-points: {}
-```
-
-`sudo netplan apply`
-
-`/etc/hostapd/hostapd.conf`:
-
-```ini
-interface=wlan0
-driver=nl80211
-ssid=ElectivoFoto
-hw_mode=g
-channel=7
-wmm_enabled=0
-macaddr_acl=0
-auth_algs=1
-ignore_broadcast_ssid=0
-```
-
-`/etc/default/hostapd`:
-
-```ini
-DAEMON_CONF="/etc/hostapd/hostapd.conf"
-```
-
-`/etc/dnsmasq.conf`:
-
-```ini
-interface=wlan0
-bind-interfaces
-dhcp-range=192.168.4.10,192.168.4.100,255.255.255.0,24h
-address=/foto.local/192.168.4.1
-address=/print.local/192.168.4.1
-no-resolv
-no-poll
-```
-
-Habilitar servicios:
-
-```bash
-sudo systemctl unmask hostapd
-sudo systemctl enable hostapd dnsmasq
-sudo systemctl start hostapd dnsmasq
-sudo systemctl status hostapd dnsmasq
-```
-
-### Captive portal (opcional)
-
-```ini
-# dnsmasq.conf
-address=/#/192.168.4.1
-```
-
-> Aviso: esto redirige cualquier dominio al servidor (no hay acceso real a Internet).
 
 ## Pruebas rápidas
 
@@ -473,10 +387,12 @@ curl -c cookies.txt -H "Content-Type: application/json" \
 curl -b cookies.txt http://localhost:3000/admin/api/jobs
 ```
 
-5. Imprimir:
+5. Imprimir (con selección de tamaño):
 
 ```bash
-curl -b cookies.txt -X POST http://localhost:3000/admin/print/1
+curl -b cookies.txt -X POST http://localhost:3000/admin/print/1 \
+  -H "Content-Type: application/json" \
+  -d '{"size":"20x15"}'
 ```
 
 6. Eliminar foto:
@@ -499,24 +415,38 @@ lpq -P Brother-DCP-L3551CDW
 
 ## Cambiar de impresora
 
-El servidor usa **IPP Everywhere (driverless)**, por lo que cualquier impresora Brother moderna funciona sin instalar drivers adicionales. Solo cambia el nombre en CUPS y en el `.env`.
+El servidor usa **IPP Everywhere (driverless)**, por lo que cualquier impresora Brother moderna funciona sin instalar drivers adicionales.
+
+La opción `[7]` del script automatiza todo el proceso:
 
 ```bash
-# 1. Conectar la nueva impresora por USB y verificar el nombre asignado
-lpstat -p
-
-# 2. Registrarla en CUPS (si no aparece sola)
-sudo lpadmin -p NUEVAIMPRESORA \
-    -v "ipp://Brother%20NombreModelo%20series%20(USB)._ipp._tcp.local/" \
-    -m everywhere \
-    -E
-
-# 3. Actualizar el .env con el nuevo nombre
-sudo bash scripts/setup.sh  # → [6] Reconfigurar .env
-# Cuando pregunte el nombre de la impresora, escribir el que apareció en lpstat -p
+sudo bash scripts/setup.sh  # → [7] Configurar impresora
 ```
 
-> El URI exacto para el paso 2 se obtiene con `sudo lpinfo -v | grep -i usb` tras conectar la impresora.
+El script:
+1. Muestra las impresoras ya registradas en CUPS
+2. Detecta automáticamente los dispositivos USB conectados con `lpinfo -v`
+3. Si hay una sola impresora, la autoselecciona (pide confirmación)
+4. Si hay varias, muestra lista numerada para elegir
+5. Registra la impresora en CUPS con `lpadmin -m everywhere`
+6. Actualiza `PRINTER_NAME` en `/opt/print-server/.env`
+7. Reinicia el servidor
+
+**Proceso manual** (si se prefiere):
+
+```bash
+# 1. Conectar la nueva impresora y obtener su URI
+sudo lpinfo -v | grep -i usb
+
+# 2. Registrar en CUPS
+sudo lpadmin -p NUEVAIMPRESORA \
+    -v "ipp://Brother%20NombreModelo%20series%20(USB)._ipp._tcp.local/" \
+    -m everywhere -E
+
+# 3. Actualizar .env y reiniciar
+sudo sed -i 's/^PRINTER_NAME=.*/PRINTER_NAME=NUEVAIMPRESORA/' /opt/print-server/.env
+sudo systemctl restart print-server
+```
 
 ---
 
