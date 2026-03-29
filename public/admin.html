@@ -1151,10 +1151,13 @@
       }
 
       async function uploadCsv(file) {
-        const fd = new FormData();
-        fd.append('csv', file);
+        const text = await file.text();
         try {
-          const res  = await fetch('/admin/api/alumnos/import', { method: 'POST', body: fd });
+          const res  = await fetch('/admin/api/alumnos/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: text,
+          });
           const data = await res.json();
           if (!data.success) { showStatus(`Error: ${data.error}`, false); return; }
           const warn = data.errores.length ? ` (${data.errores.length} filas ignoradas)` : '';

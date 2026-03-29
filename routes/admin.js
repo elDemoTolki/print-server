@@ -2,16 +2,12 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const bcrypt = require('bcrypt');
-const multer = require('multer');
 const sharp = require('sharp');
 const config = require('../config');
 const db = require('../db/database');
 const { requireAdmin } = require('../middleware/auth');
 const printRouter = require('./print');
 const { broadcast } = require('./events');
-
-// Multer solo para CSV en memoria (no escribe a disco)
-const csvUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 1 * 1024 * 1024 } });
 
 // ── Report helpers ────────────────────────────────────────────────────────────
 
@@ -344,12 +340,13 @@ router.post('/api/alumnos', requireAdmin, (req, res) => {
   return res.json({ success: true, alumno });
 });
 
-router.post('/api/alumnos/import', requireAdmin, csvUpload.single('csv'), (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ success: false, error: 'No se recibió ningún archivo.' });
+// Recibe el CSV como texto plano (Content-Type: text/plain) — sin multer
+router.post('/api/alumnos/import', requireAdmin, express.text({ type: 'text/plain', limit: '1mb' }), (req, res) => {
+  if (!req.body || !req.body.trim()) {
+    return res.status(400).json({ success: false, error: 'No se recibió contenido CSV.' });
   }
 
-  const text = req.file.buffer.toString('utf8');
+  const text = req.body;
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
 
   // Saltar encabezado si la primera línea contiene "nombre"
