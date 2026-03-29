@@ -251,6 +251,7 @@ SVCEOF
 
 detect_wifi_iface() {
     local detected
+    # iw dev es más confiable que asumir wlan0; en muchos sistemas es wlp2s0, wlp3s0, etc.
     detected=$(iw dev 2>/dev/null | awk '$1=="Interface"{print $2}' | head -1) || true
 
     if [[ -n "$detected" ]]; then
@@ -260,8 +261,17 @@ detect_wifi_iface() {
         read -rp "  ¿Usar esta interfaz? [S/n]: " confirm
         [[ "$confirm" =~ ^[Nn]$ ]] && read -rp "  Interfaz WiFi: " WIFI_IFACE
     else
-        warn "No se detectó interfaz WiFi automáticamente."
-        read -rp "  Ingresa la interfaz WiFi (ej. wlan0): " WIFI_IFACE
+        # Fallback: listar todas las interfaces inalámbricas disponibles
+        local ifaces
+        ifaces=$(ls /sys/class/net/ | xargs -I{} sh -c 'test -d /sys/class/net/{}/wireless && echo {}' 2>/dev/null) || true
+        if [[ -n "$ifaces" ]]; then
+            warn "iw no detectó la interfaz. Interfaces inalámbricas encontradas:"
+            echo "$ifaces" | nl -ba -nrz -w2
+            read -rp "  Ingresa la interfaz WiFi: " WIFI_IFACE
+        else
+            warn "No se detectó interfaz WiFi automáticamente."
+            read -rp "  Ingresa la interfaz WiFi (ej. wlp2s0): " WIFI_IFACE
+        fi
     fi
 
     iw list 2>/dev/null | grep -q "AP" \
