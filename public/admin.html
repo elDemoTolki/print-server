@@ -116,6 +116,48 @@
     .btn-delete:disabled { opacity: 0.4; cursor: not-allowed; }
 
     .actions-cell { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+
+    /* Prof upload */
+    .prof-upload {
+      padding: 14px 16px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .prof-upload-info { font-weight: 700; font-size: 0.9rem; }
+    .prof-upload-sub  { font-size: 0.78rem; color: var(--muted-2); margin-top: 2px; }
+    #prof-status {
+      display: none;
+      margin-top: 8px;
+      width: 100%;
+      font-size: 0.82rem;
+      padding: 6px 10px;
+      border-radius: var(--radius-sm);
+    }
+
+    /* Size modal */
+    .size-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.65);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 200;
+    }
+    .size-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px 24px 20px;
+      width: min(320px, 90vw);
+    }
+    .size-title {
+      font-weight: 700; font-size: 1rem;
+      text-align: center; margin-bottom: 18px; color: var(--text);
+    }
+    .size-btns { display: flex; gap: 10px; }
+    .size-btns .btn { flex: 1; }
   </style>
 </head>
 <body class="page">
@@ -141,6 +183,17 @@
     </header>
 
     <main class="admin-body">
+
+      <!-- Subida profesora -->
+      <div class="card prof-upload" id="prof-upload-section">
+        <div>
+          <div class="prof-upload-info">Subir foto de la profesora</div>
+          <div class="prof-upload-sub">Nicol Valencia · Profesora</div>
+        </div>
+        <button class="btn" id="prof-upload-btn" style="width:auto;height:36px;padding:0 18px">📷 Subir foto</button>
+        <input type="file" id="prof-file" accept="image/*" style="display:none" />
+        <div id="prof-status"></div>
+      </div>
 
       <!-- Filters -->
       <div class="filters">
@@ -201,6 +254,18 @@
       </div>
 
     </main>
+  </div>
+
+  <!-- Modal tamaño de impresión -->
+  <div class="size-overlay" id="size-modal" style="display:none" role="dialog" aria-modal="true">
+    <div class="size-box">
+      <p class="size-title">🖨 Tamaño de impresión</p>
+      <div class="size-btns">
+        <button class="btn" id="size-20x15">20×15 cm</button>
+        <button class="btn btn-secondary" id="size-10x7">10×7 cm</button>
+      </div>
+      <button class="btn-delete" id="size-cancel" style="width:100%;margin-top:10px;height:34px">Cancelar</button>
+    </div>
   </div>
 
   <!-- Lightbox -->
@@ -304,13 +369,46 @@
     filterCurso.addEventListener('change',  applyFilters);
     filterMes.addEventListener('change',    applyFilters);
 
+    // ── Print size modal ─────────────────────
+    function askPrintSize() {
+      return new Promise((resolve) => {
+        const modal  = document.getElementById('size-modal');
+        const btn20  = document.getElementById('size-20x15');
+        const btn10  = document.getElementById('size-10x7');
+        const cancel = document.getElementById('size-cancel');
+        modal.style.display = 'flex';
+
+        function pick(size) {
+          modal.style.display = 'none';
+          btn20.removeEventListener('click', on20);
+          btn10.removeEventListener('click', on10);
+          cancel.removeEventListener('click', onCancel);
+          resolve(size);
+        }
+        const on20     = () => pick('20x15');
+        const on10     = () => pick('10x7');
+        const onCancel = () => pick(null);
+
+        btn20.addEventListener('click', on20);
+        btn10.addEventListener('click', on10);
+        cancel.addEventListener('click', onCancel);
+      });
+    }
+
     // ── Print ────────────────────────────────
     async function printJob(id, btn) {
+      const size = await askPrintSize();
+      if (!size) return;
+
       btn.disabled = true;
       const orig = btn.textContent;
       btn.textContent = 'Enviando…';
       try {
-        const res  = await fetch(`/admin/print/${id}`, { method: 'POST' });
+        const res  = await fetch(`/admin/print/${id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ size })
+        });
         const data = await res.json();
         if (!data.success) alert(data.error || 'Error en la impresión.');
         else loadJobs();
@@ -321,6 +419,47 @@
         btn.textContent = orig;
       }
     }
+
+    // ── Prof upload ───────────────────────────
+    (function () {
+      const profBtn    = document.getElementById('prof-upload-btn');
+      const profFile   = document.getElementById('prof-file');
+      const profStatus = document.getElementById('prof-status');
+
+      profBtn.addEventListener('click', () => profFile.click());
+
+      profFile.addEventListener('change', async () => {
+        const file = profFile.files[0];
+        if (!file) return;
+
+        profBtn.disabled = true;
+        profBtn.textContent = 'Subiendo…';
+        profStatus.style.display = 'none';
+
+        const fd = new FormData();
+        fd.append('photo', file);
+        fd.append('alumno', 'Nicol Valencia');
+        fd.append('curso', 'Profesora');
+
+        try {
+          const res  = await fetch('/upload', { method: 'POST', body: fd });
+          const data = await res.json();
+          if (!data.success) throw new Error(data.error || 'Error al subir');
+          profStatus.style.display = 'block';
+          profStatus.style.color   = 'var(--green, #22c55e)';
+          profStatus.textContent   = '✔ Foto subida correctamente';
+          loadJobs();
+        } catch (err) {
+          profStatus.style.display = 'block';
+          profStatus.style.color   = 'var(--red)';
+          profStatus.textContent   = `✖ ${err.message}`;
+        } finally {
+          profBtn.disabled    = false;
+          profBtn.textContent = '📷 Subir foto';
+          profFile.value      = '';
+        }
+      });
+    })();
 
     // ── Delete ───────────────────────────────
     async function deleteJob(id, alumno, btn) {

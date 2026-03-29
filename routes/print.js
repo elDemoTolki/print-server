@@ -6,6 +6,11 @@ const db = require('../db/database');
 const { requireAdmin } = require('../middleware/auth');
 const { broadcast } = require('./events');
 
+const MEDIA_SIZES = {
+  '20x15': 'Custom.200x150mm',
+  '10x7':  'Custom.100x70mm',
+};
+
 const router = express.Router();
 
 router.post('/:id', requireAdmin, (req, res) => {
@@ -22,7 +27,9 @@ router.post('/:id', requireAdmin, (req, res) => {
   const filePath = path.resolve(config.uploadDir, job.filename);
 
   try {
-    execSync(`lp -d "${config.printerName}" -o media=4x6 -o fit-to-page "${filePath}"`, { timeout: 20000 });
+    const size  = req.body && MEDIA_SIZES[req.body.size];
+    const media = size || '4x6';
+    execSync(`lp -d "${config.printerName}" -o media=${media} -o fit-to-page "${filePath}"`, { timeout: 20000 });
     db.incrementPrintCount(id);
     db.logPrint(id);
 
