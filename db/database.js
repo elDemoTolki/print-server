@@ -83,13 +83,15 @@ function toggleLike(jobId, ip) {
   return { liked: !existing, count };
 }
 
-function getJobsByDateRange(from, to) {
-  // date() en SQLite maneja tanto "YYYY-MM-DD HH:MM:SS" como "YYYY-MM-DDTHH:MM:SSZ"
+function getJobsByDateRange(fromUtc, toUtc) {
+  // fromUtc y toUtc son ISO strings UTC (ej. "2026-03-28T03:00:00.000Z")
+  // que representan el inicio y fin del día en hora Santiago.
+  // La comparación directa funciona porque uploaded_at también es ISO UTC.
   return db.prepare(
     'SELECT id, filename, alumno, curso, uploaded_at FROM jobs ' +
-    'WHERE date(uploaded_at) >= ? AND date(uploaded_at) <= ? ' +
+    'WHERE uploaded_at >= ? AND uploaded_at <= ? ' +
     'ORDER BY uploaded_at ASC'
-  ).all(from, to);
+  ).all(fromUtc, toUtc);
 }
 
 function deleteJob(id) {

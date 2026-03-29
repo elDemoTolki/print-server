@@ -267,6 +267,19 @@ router.delete('/jobs/:id', requireAdmin, (req, res) => {
   return res.json({ success: true });
 });
 
+// Convierte "YYYY-MM-DD HH:MM:SS" hora Santiago a UTC ISO string,
+// manejando correctamente el horario de verano/invierno de Chile.
+function santiagoToUtc(dateStr, timeStr) {
+  const probe = new Date(`${dateStr}T${timeStr}Z`);
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Santiago',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).formatToParts(probe).reduce((a, p) => p.type !== 'literal' ? { ...a, [p.type]: p.value } : a, {});
+  const localAsUtc = new Date(`${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}Z`);
+  return new Date(probe.getTime() + (probe - localAsUtc)).toISOString();
+}
+
 router.get('/report', requireAdmin, async (req, res) => {
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' });
   const from = req.query.from || today;
@@ -276,7 +289,9 @@ router.get('/report', requireAdmin, async (req, res) => {
     return res.status(400).send('Fechas inválidas.');
   }
 
-  const jobs = db.getJobsByDateRange(from, to);
+  const fromUtc = santiagoToUtc(from, '00:00:00');
+  const toUtc   = santiagoToUtc(to,   '23:59:59');
+  const jobs = db.getJobsByDateRange(fromUtc, toUtc);
 
   const jobsWithImages = await Promise.all(jobs.map(async (job) => {
     const filePath = path.join(config.uploadDir, job.filename);
