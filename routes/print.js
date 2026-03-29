@@ -8,12 +8,13 @@ const db = require('../db/database');
 const { requireAdmin } = require('../middleware/auth');
 const { broadcast } = require('./events');
 
-// Dimensiones en píxeles a 300 DPI para cada tamaño de impresión.
-// 20×15 cm → (200/25.4)×300 = 2362 × (150/25.4)×300 = 1772 px
-// 10×7  cm → (100/25.4)×300 = 1181 × ( 70/25.4)×300 =  827 px
+// Dimensiones en píxeles a 300 DPI — orientación PORTRAIT (alto > ancho).
+// 15×20 cm → ancho: (150/25.4)×300 = 1772 px  alto: (200/25.4)×300 = 2362 px
+//  7×10 cm → ancho: ( 70/25.4)×300 =  827 px  alto: (100/25.4)×300 = 1181 px
+// El media CUPS debe coincidir exactamente con el papel cargado en la impresora.
 const PRINT_SIZES = {
-  '20x15': { w: 2362, h: 1772 },
-  '10x7':  { w: 1181, h:  827 },
+  '20x15': { w: 1772, h: 2362, media: 'Custom.150x200mm' },
+  '10x7':  { w:  827, h: 1181, media: 'Custom.70x100mm'  },
 };
 
 const router = express.Router();
@@ -36,17 +37,21 @@ router.post('/:id', requireAdmin, (req, res) => {
     const dims = req.body && PRINT_SIZES[req.body.size];
 
     let printPath = filePath;
+    let media = 'Custom.150x200mm';  // fallback si no viene size
+
     if (dims) {
-      tempFile  = path.join(os.tmpdir(), `print_${id}_${Date.now()}.jpg`);
-      // Redimensiona manteniendo proporción, rellena con blanco hasta el tamaño exacto
+      media    = dims.media;
+      tempFile = path.join(os.tmpdir(), `print_${id}_${Date.now()}.jpg`);
+      // Redimensiona manteniendo proporción, rellena con blanco hasta el tamaño exacto.
+      // -auto-orient corrige la rotación EXIF antes de procesar.
       execSync(
-        `convert "${filePath}" -resize ${dims.w}x${dims.h} -background white -gravity center -extent ${dims.w}x${dims.h} -units PixelsPerInch -density 300 "${tempFile}"`,
+        `convert "${filePath}" -auto-orient -resize ${dims.w}x${dims.h} -background white -gravity center -extent ${dims.w}x${dims.h} -units PixelsPerInch -density 300 "${tempFile}"`,
         { timeout: 30000 }
       );
       printPath = tempFile;
     }
 
-    execSync(`lp -d "${config.printerName}" -o media=iso_a4_210x297mm -o print-scaling=none "${printPath}"`, { timeout: 20000 });
+    execSync(`lp -d "${config.printerName}" -o media=${media} -o print-scaling=none "${printPath}"`, { timeout: 20000 });
     db.incrementPrintCount(id);
     db.logPrint(id);
 
