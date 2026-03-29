@@ -8,18 +8,20 @@ const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
-const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
-db.exec(schema);
-
-// Migraciones incrementales — ALTER TABLE es idempotente via try/catch
-// porque SQLite no soporta IF NOT EXISTS en ALTER TABLE.
+// Migraciones de columnas ANTES del schema: el schema crea índices sobre estas
+// columnas, por lo que deben existir cuando db.exec(schema) se ejecuta en una
+// DB preexistente. En instalación nueva el ALTER falla silenciosamente (la tabla
+// aún no existe) y el CREATE TABLE del schema ya las incluye.
 const migrations = [
   "ALTER TABLE jobs ADD COLUMN owner_token TEXT",
   "ALTER TABLE jobs ADD COLUMN mes_local TEXT",
 ];
 for (const sql of migrations) {
-  try { db.exec(sql); } catch (_) { /* columna ya existe */ }
+  try { db.exec(sql); } catch (_) { /* columna ya existe o tabla aún no existe */ }
 }
+
+const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
+db.exec(schema);
 
 function getAllJobs() {
   return db.prepare('SELECT * FROM jobs ORDER BY uploaded_at DESC').all();
