@@ -7,7 +7,10 @@ Servidor local para el electivo de fotografía y multimedia escolar. Permite a l
 - Carga de fotos desde dispositivo móvil (alumnos) y desde el panel admin (profesora)
 - Galería pública en tiempo real con SSE
 - **Likes en fotos**: botón ♥ por IP (toggle), contador en tiempo real, ordenación por popularidad
-- Panel administrador: impresión, eliminación, exportación de reportes y subida de fotos
+- **Perfiles de alumno**: lista cerrada de alumnos por curso, vinculación por `device_token` sin login
+- **Mis fotos**: panel personal del alumno, filtro por mes, selección de foto del mes
+- **Foto del mes**: página pública con la foto elegida por cada alumno por mes; override del profesor
+- Panel administrador: impresión, eliminación, exportación de reportes, gestión de alumnos y foto del mes
 - Selección de tamaño de impresión al momento de imprimir (20×15 cm / 10×7 cm)
 - Impresión driverless vía **IPP Everywhere** (sin drivers específicos por modelo)
 - WiFi AP local con **WPA2**, **portal cautivo** y servicio systemd para arranque automático
@@ -39,6 +42,8 @@ print-server/
 │   ├── uploads/
 │   ├── index.html
 │   ├── gallery.html
+│   ├── mis-fotos.html
+│   ├── foto-del-mes.html
 │   ├── admin-login.html
 │   └── admin.html
 ├── scripts/
@@ -209,9 +214,16 @@ npm start
 
 ### Alumnos (público)
 - `GET /` → portal de upload de alumnos
-- `POST /upload` → recibe foto + campos `alumno`, `curso`
+- `POST /upload` → recibe foto; acepta `alumno_id` + `device_token` (modo alumno) o `alumno` + `curso` (modo legado)
 - `GET /gallery` → galería en tiempo real
+- `GET /mis-fotos` → panel personal del alumno (fotos propias + foto del mes)
+- `GET /foto-del-mes` → página pública con la foto del mes de cada alumno
 - `GET /api/jobs` → datos JSON de la galería (incluye `like_count`)
+- `GET /api/alumnos` → lista de alumnos activos (id, nombre, curso) para el formulario de upload
+- `GET /api/mis-fotos?token=...` → fotos del token + mapa de fotos del mes
+- `POST /api/foto-del-mes` → el alumno elige su foto del mes (solo mes actual, foto propia)
+- `GET /api/foto-del-mes?mes=YYYY-MM` → fotos del mes elegidas (público)
+- `GET /api/foto-del-mes/meses` → meses con al menos una foto elegida (público)
 - `POST /like/:id` → toggle like/unlike (deduplicado por IP)
 - `GET /events` → SSE para actualizaciones en tiempo real
 
@@ -219,27 +231,41 @@ npm start
 - `GET /admin/login` → formulario de login
 - `POST /admin/login` → autenticación
 - `POST /admin/logout` → cerrar sesión
-- `GET /admin` → panel de impresión
+- `GET /admin` → panel (tabs: Fotos / Alumnos / Foto del mes)
 - `GET /admin/api/jobs` → historial completo con `print_history`
 - `POST /admin/print/:id` → enviar foto a imprimir
 - `DELETE /admin/jobs/:id` → eliminar foto y registro (borra archivo del disco)
-- `GET /admin/report` → exportar reporte HTML con rango de fechas y filtros aplicados
+- `GET /admin/report` → exportar reporte HTML con rango de fechas
+- `GET /admin/api/alumnos` → lista de alumnos con sus tokens
+- `POST /admin/api/alumnos` → crear alumno individual
+- `POST /admin/api/alumnos/import` → importar CSV (`nombre,curso`)
+- `PATCH /admin/api/alumnos/:id/activo` → activar/desactivar alumno
+- `PATCH /admin/api/tokens/:token/desactivar` → desactivar un dispositivo
+- `PATCH /admin/api/tokens/:token/reasignar` → mover token a otro alumno
+- `GET /admin/api/foto-del-mes?mes=YYYY-MM` → fotos del mes (con datos de alumno)
+- `GET /admin/api/foto-del-mes/meses` → meses disponibles
+- `POST /admin/api/foto-del-mes/override` → el profesor marca foto del mes para un alumno
 
 ## Base de datos (SQLite)
 
-- `jobs`: id, filename, original_name, alumno, curso, status, print_count, uploaded_at
+- `jobs`: id, filename, original_name, alumno, curso, status, print_count, uploaded_at, **owner_token**, **mes_local**
 - `print_log`: id, job_id, printed_at
 - `likes`: id, job_id, ip, created_at — con restricción `UNIQUE(job_id, ip)` para deduplicar por IP
+- `alumnos`: id, nombre, curso, activo — lista cerrada de alumnos del electivo
+- `device_tokens`: token, alumno_id, ip_primer_uso, ua_primer_uso, vinculado_at, activo — un alumno puede tener múltiples tokens
+- `foto_del_mes`: id, alumno_id, job_id, mes (YYYY-MM), elegida_at, elegida_por ('alumno'|'profesor') — con `UNIQUE(alumno_id, mes)`
 
-> Al eliminar un job se borran primero sus registros en `print_log` y luego el job, más el archivo físico en `UPLOAD_DIR`.
+> Al eliminar un job se borran en cascada los registros de `print_log`, `likes` y `foto_del_mes` antes de borrar el job y el archivo físico.
+
+> `mes_local` se calcula en Node.js con hora local del servidor al momento del INSERT, evitando que el offset UTC desplace una foto al mes siguiente.
 
 ## Descripción de módulos
 
-- `db/database.js` — better-sqlite3 (síncrono). Funciones: `createJob`, `getJobById`, `getAdminJobs`, `getGalleryJobs`, `incrementPrintCount`, `logPrint`, `deleteJob`, `toggleLike`
+- `db/database.js` — better-sqlite3 (síncrono). Funciones para jobs, alumnos, device_tokens y foto_del_mes. Incluye migración `ALTER TABLE` idempotente para DBs existentes.
 - `routes/events.js` — SSE: mantiene conexiones abiertas, expone `broadcast(eventName, data)`
-- `routes/upload.js` — multer + validación + inserción en DB + broadcast `new-photo`
-- `routes/gallery.js` — galería pública, API JSON y toggle de likes (`POST /like/:id`)
-- `routes/admin.js` — login, logout, panel, jobs admin, print router, delete job, generación de reporte HTML
+- `routes/upload.js` — multer + validación + inserción en DB + vinculación de device_token + broadcast `new-photo`
+- `routes/gallery.js` — galería pública, mis-fotos, foto-del-mes, API JSON y toggle de likes
+- `routes/admin.js` — login, panel, jobs, print router, gestión de alumnos, tokens y foto del mes
 - `routes/print.js` — `lp` + actualizaciones DB + broadcast `print-update`
 - `middleware/auth.js` — `requireAdmin` (verifica sesión)
 - `public/js/theme.js` — toggle tema oscuro / Sakura (guarda preferencia en `localStorage`)
@@ -247,43 +273,70 @@ npm start
 ## Frontend
 
 ### `public/index.html` — Portal de alumnos
+- Selector de curso dinámico (cargado desde `/api/alumnos`)
+- Selector de nombre filtrado por curso (lista cerrada, sin texto libre)
+- `device_token` generado en `localStorage` automáticamente; se reenvía en cada upload
+- Si el alumno ya usó el formulario, su nombre queda preseleccionado
 - Zona de upload con drag & drop y preview de imagen
-- Selector de curso (lista desplegable: 3 Medio A – F)
-- Validación de campos antes de enviar
 - Toast animado tras subida exitosa; el formulario se resetea automáticamente
-- Links a galería y panel admin
+- Links a galería, mis fotos, foto del mes y panel admin
 
 ### `public/gallery.html` — Galería pública
 - Grid responsive de fotos con overlay (nombre y curso del alumno)
-- Filtros: búsqueda por alumno, por curso (incluye Profesora), por mes y por popularidad
-- Selector de orden: **Más recientes** / **Más populares** (ordena por `like_count`)
-- **Botón ♥ (like)** en cada card: toggle con animación; contador actualizado en tiempo real; estado persistido en `localStorage` (set de IDs likeados)
-- Contador de fotos con indicador de filtro activo
-- Lightbox al hacer clic en una foto:
-  - Navegación con flechas ← → y teclas de teclado
-  - Swipe táctil para avanzar/retroceder
-  - Contador de posición (ej. "3 / 12")
-  - Se cierra con clic fuera, botón ✕ o tecla Escape
-- Badge "NUEVO" en fotos recién subidas (SSE `new-photo`)
-- Elimina fotos en tiempo real al recibir SSE `delete-photo`
+- Filtros: búsqueda por alumno, por curso, por mes y por popularidad
+- Selector de orden: **Más recientes** / **Más populares**
+- Botón ♥ (like) en cada card con animación y estado en `localStorage`
+- Lightbox con navegación por flechas, teclado y swipe táctil
+- Badge "NUEVO" en fotos recién subidas (SSE)
+- Link a "Foto del mes"
+
+### `public/mis-fotos.html` — Panel personal del alumno
+- Identificación automática por `device_token` en `localStorage`
+- Si el dispositivo no tiene token registrado → mensaje con link a subir foto
+- Selector de mes (solo meses donde el alumno tiene fotos)
+- Indicador mes abierto (actual) / cerrado (pasados)
+- Banner con la foto del mes elegida; nota especial si fue seleccionada por el profesor
+- Grid de fotos: tap en mes abierto = seleccionar para foto del mes; doble tap = lightbox
+- Barra inferior con "Elegir como foto del mes" / Cancelar
+- El alumno puede cambiar su elección mientras el mes esté abierto
+
+### `public/foto-del-mes.html` — Galería pública de foto del mes
+- Selector de mes (solo meses con fotos elegidas)
+- Filtro por curso
+- Grid de cards con foto, nombre y curso del alumno
+- Lightbox con navegación
+- Se preselecciona el mes actual si tiene fotos
 
 ### `public/admin-login.html` — Login admin
 - Formulario de contraseña con feedback de error inline
 
 ### `public/admin.html` — Panel de administración
-- Saludo personalizado al profesor
-- **Sección "Subir foto de la profesora"** → sube imagen registrada automáticamente como `Nicol Valencia / Profesora`
-- Filtro por nombre de alumno, por curso y por mes (se aplica en tiempo real)
-- Rango de fechas y botón **Exportar reporte** → descarga tabla HTML con todos los filtros aplicados, apta para Excel
-- Contador de trabajos con indicador de filtro activo
-- Toggle de tema oscuro / Sakura (persiste en `localStorage`)
-- Vista adaptativa:
-  - **Desktop**: tabla con miniatura, nombre, curso, fecha, estado, impresiones, likes y acciones
-  - **Mobile**: tarjetas con miniatura, estado, impresiones, likes y acciones
-- Botón **Imprimir** → abre modal de selección de tamaño (20×15 cm / 10×7 cm) antes de enviar a CUPS
-- Botón **Eliminar** → pide confirmación, borra archivo y registro, actualiza sin recargar
+- **Tab Fotos**: tabla/cards de jobs con filtros, impresión, eliminación, botón ⭐ para marcar foto del mes
+- **Tab Alumnos**: importación CSV (`nombre,curso`), alta manual, lista con tokens por alumno, activar/desactivar alumnos y dispositivos
+- **Tab Foto del mes**: grid por mes y curso con las fotos elegidas; botón "Cambiar" abre modal de override
+- **Modal override**: preview de la foto, selector de alumno y de mes (últimos 12); pide confirmación si ya hay selección; registra `elegida_por = 'profesor'`
+- Exportación de reportes HTML por rango de fechas
 - Indicador de conexión SSE (punto verde/amarillo)
-- Se actualiza automáticamente ante eventos: `new-photo`, `print-update`, `delete-photo`
+
+## Sistema de perfiles de alumno
+
+Los alumnos se identifican sin login mediante un `device_token` (UUID) generado en `localStorage`:
+
+1. El profesor carga la lista de alumnos desde el panel admin (CSV o alta manual)
+2. El alumno selecciona su nombre de un `<select>` filtrado por curso al subir la primera foto
+3. El `device_token` queda vinculado al `alumno_id` elegido; se guarda la IP y User-Agent como auditoría
+4. En visitas posteriores el mismo dispositivo se reconoce automáticamente
+5. Si un alumno cambia de dispositivo, el profesor puede reasignar el token viejo al nuevo desde el panel admin (tab Alumnos)
+6. Un alumno puede tener múltiples tokens activos (varios dispositivos)
+
+## Foto del mes
+
+- Cada alumno puede elegir **una foto** como su "foto del mes" mientras el mes esté abierto (mes calendario actual)
+- El mes se determina por `mes_local`, calculado en Node.js con hora local del servidor al insertar la foto
+- El alumno puede cambiar su elección antes del cierre del mes (fin del mes calendario)
+- El profesor puede hacer override desde el panel admin: elige la foto, el alumno y el mes (libre, sin restricción)
+- Si el profesor hizo el override, el alumno ve "Foto del mes seleccionada por tu profesor" y no puede cambiarla
+- La página pública `/foto-del-mes` muestra las fotos elegidas filtradas por mes y curso
 
 ## SSE (Server-Sent Events)
 
@@ -321,17 +374,9 @@ Post impresión:
 - `logPrint(id)`
 - `broadcast('print-update', { id, print_count, status })`
 
-## Cursos disponibles
-
-Los cursos están definidos como lista fija en `index.html` y en los filtros de `gallery.html` / `admin.html`:
-
-- 3 Medio A · 3 Medio B · 3 Medio C · 3 Medio D · 3 Medio E · 3 Medio F · Profesora
-
-Para agregar o cambiar cursos, editar los `<option>` en los tres archivos HTML.
-
 ## Manejo de errores
 
-- Respuestas JSON con `{ success, error }` en rutas API (400/401/404/500)
+- Respuestas JSON con `{ success, error }` en rutas API (400/401/403/404/500)
 - Middleware global 404 + 500 en `server.js`
 - Errores de multer manejados en `upload.js` (tamaño, tipo de archivo)
 
@@ -363,7 +408,16 @@ sudo journalctl -u print-server -f
 
 ## Pruebas rápidas
 
-1. Subir foto:
+1. Subir foto (modo alumno):
+
+```bash
+curl -X POST http://localhost:3000/upload \
+  -F "photo=@/ruta/a/foto.jpg" \
+  -F "alumno_id=1" \
+  -F "device_token=mi-uuid-aqui"
+```
+
+2. Subir foto (modo legado):
 
 ```bash
 curl -X POST http://localhost:3000/upload \
@@ -372,19 +426,25 @@ curl -X POST http://localhost:3000/upload \
   -F "curso=3 Medio A"
 ```
 
-2. Ver trabajos (galería):
+3. Ver trabajos (galería):
 
 ```bash
 curl http://localhost:3000/api/jobs
 ```
 
-3. Ver SSE:
+4. Ver lista de alumnos:
 
 ```bash
-curl -N http://localhost:3000/events
+curl http://localhost:3000/api/alumnos
 ```
 
-4. Login admin + listar:
+5. Ver fotos del mes:
+
+```bash
+curl "http://localhost:3000/api/foto-del-mes?mes=2026-03"
+```
+
+6. Login admin + listar:
 
 ```bash
 curl -c cookies.txt -H "Content-Type: application/json" \
@@ -392,7 +452,22 @@ curl -c cookies.txt -H "Content-Type: application/json" \
 curl -b cookies.txt http://localhost:3000/admin/api/jobs
 ```
 
-5. Imprimir (con selección de tamaño):
+7. Importar alumnos CSV (admin):
+
+```bash
+curl -b cookies.txt -X POST http://localhost:3000/admin/api/alumnos/import \
+  -F "csv=@alumnos.csv"
+```
+
+8. Override foto del mes (admin):
+
+```bash
+curl -b cookies.txt -X POST http://localhost:3000/admin/api/foto-del-mes/override \
+  -H "Content-Type: application/json" \
+  -d '{"alumno_id":1,"job_id":5,"mes":"2026-03"}'
+```
+
+9. Imprimir (con selección de tamaño):
 
 ```bash
 curl -b cookies.txt -X POST http://localhost:3000/admin/print/1 \
@@ -400,29 +475,17 @@ curl -b cookies.txt -X POST http://localhost:3000/admin/print/1 \
   -d '{"size":"20x15"}'
 ```
 
-6. Toggle like en foto:
+10. Toggle like en foto:
 
 ```bash
 curl -X POST http://localhost:3000/like/1
 # → { "success": true, "liked": true, "count": 1 }
 ```
 
-7. Eliminar foto:
+11. Ver SSE:
 
 ```bash
-curl -b cookies.txt -X DELETE http://localhost:3000/admin/jobs/1
-```
-
-8. Exportar reporte:
-
-```bash
-curl -b cookies.txt "http://localhost:3000/admin/report?from=2025-01-01&to=2025-12-31" -o reporte.html
-```
-
-9. Ver cola CUPS:
-
-```bash
-lpq -P Brother-DCP-L3551CDW
+curl -N http://localhost:3000/events
 ```
 
 ## Cambiar de impresora
@@ -434,15 +497,6 @@ La opción `[7]` del script automatiza todo el proceso:
 ```bash
 sudo bash scripts/setup.sh  # → [7] Configurar impresora
 ```
-
-El script:
-1. Muestra las impresoras ya registradas en CUPS
-2. Detecta automáticamente los dispositivos USB conectados con `lpinfo -v`
-3. Si hay una sola impresora, la autoselecciona (pide confirmación)
-4. Si hay varias, muestra lista numerada para elegir
-5. Registra la impresora en CUPS con `lpadmin -m everywhere`
-6. Actualiza `PRINTER_NAME` en `/opt/print-server/.env`
-7. Reinicia el servidor
 
 **Proceso manual** (si se prefiere):
 
@@ -467,10 +521,12 @@ sudo systemctl restart print-server
 - `UPLOAD_DIR` debe apuntar a `public/uploads` para que las imágenes sean servidas por Express.
 - Modo offline: sin Internet. No se usan CDNs ni scripts externos.
 - `better-sqlite3` es síncrono (no usa async/await).
-- Al eliminar un job, el archivo físico se borra del disco y los registros de `print_log` se eliminan en cascada manual antes de borrar el job.
+- Al eliminar un job, el archivo físico se borra del disco y los registros de `print_log`, `likes` y `foto_del_mes` se eliminan antes de borrar el job.
+- La migración de columnas (`owner_token`, `mes_local`) se aplica automáticamente al arrancar si la DB ya existía.
+- Los cursos ya no son lista fija en el HTML: se gestionan desde el panel admin al cargar alumnos.
 
 ---
 
 ## Contacto
 
-Implementación para el Electivo de Fotografía y Multimedia escolar. Para ajustes de cursos, impresora o red, editar `config.js`, los archivos HTML y `server.js` según lo descrito.
+Implementación para el Electivo de Fotografía y Multimedia escolar. Para ajustes de impresora o red, editar `config.js` y `server.js` según lo descrito.

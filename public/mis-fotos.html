@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mis fotos — Electivo de Fotografía</title>
+  <link rel="stylesheet" href="/css/app.css" />
+  <script>if(localStorage.getItem('pf-theme')==='sakura')document.documentElement.classList.add('theme-sakura');</script>
+  <style>
+    .mis-header {
+      padding: 28px 0 20px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .alumno-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      padding: 5px 14px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--muted-2);
+      margin-top: 8px;
+    }
+    .alumno-chip strong { color: var(--text); }
+
+    /* Selector de mes */
+    .mes-nav {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .mes-nav select { width: auto; min-width: 160px; flex: none; }
+    .mes-badge {
+      font-size: 0.78rem;
+      color: var(--muted-2);
+      font-weight: 600;
+    }
+    .mes-abierto  { color: var(--green); }
+    .mes-cerrado  { color: var(--muted); }
+
+    /* Foto del mes banner */
+    .fdm-banner {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 16px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .fdm-thumb {
+      width: 56px;
+      height: 56px;
+      border-radius: var(--radius-sm);
+      object-fit: cover;
+      border: 2px solid var(--accent);
+      flex-shrink: 0;
+    }
+    .fdm-info { flex: 1; min-width: 0; }
+    .fdm-title {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--accent);
+      margin-bottom: 2px;
+    }
+    .fdm-name {
+      font-size: 0.875rem;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .fdm-by-prof {
+      font-size: 0.75rem;
+      color: var(--muted-2);
+      margin-top: 2px;
+    }
+
+    /* Grid de fotos */
+    .mis-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 10px;
+      margin-bottom: 48px;
+    }
+    @media (min-width: 480px) {
+      .mis-grid { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+    }
+
+    .mis-card {
+      position: relative;
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      aspect-ratio: 3 / 4;
+      background: var(--surface);
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: border-color var(--trans);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .mis-card img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display: block;
+      transition: transform 0.35s ease;
+    }
+    .mis-card:hover img { transform: scale(1.05); }
+    .mis-card.selected { border-color: var(--accent); }
+    .mis-card.es-fdm { border-color: var(--accent); }
+
+    .mis-card-badge {
+      position: absolute;
+      top: 8px; right: 8px;
+      background: var(--accent);
+      color: #000;
+      font-size: 0.62rem;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 100px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      pointer-events: none;
+    }
+    .mis-card-date {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%);
+      padding: 20px 8px 8px;
+      font-size: 0.7rem;
+      color: rgba(255,255,255,0.7);
+      pointer-events: none;
+    }
+
+    /* Barra de acción foto del mes */
+    .fdm-action-bar {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      z-index: 200;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 14px 16px;
+      display: none;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .fdm-action-bar.visible { display: flex; }
+    .fdm-action-bar .btn {
+      width: auto;
+      min-width: 180px;
+      height: 42px;
+      padding: 0 20px;
+      font-size: 0.875rem;
+    }
+    .fdm-action-info { flex: 1; font-size: 0.82rem; color: var(--muted-2); }
+    .fdm-action-info strong { color: var(--text); }
+
+    /* Estado vacío */
+    .empty-mes {
+      text-align: center;
+      padding: 48px 16px;
+      color: var(--muted);
+    }
+    .empty-mes .icon { font-size: 2.5rem; margin-bottom: 10px; }
+
+    /* Sin token */
+    .no-token-wrap {
+      max-width: 420px;
+      margin: 60px auto;
+      text-align: center;
+      padding: 0 16px;
+    }
+    .no-token-wrap .icon { font-size: 3rem; margin-bottom: 16px; }
+    .no-token-wrap p { color: var(--muted-2); font-size: 0.9rem; margin-bottom: 20px; }
+  </style>
+</head>
+<body class="page">
+
+  <div class="container">
+    <header class="mis-header">
+      <div>
+        <p style="font-size:0.72rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);margin-bottom:4px">Electivo de Fotografía</p>
+        <h1 class="title" style="font-size:clamp(1.4rem,4vw,2rem)">Mis fotos</h1>
+        <div id="alumno-info"></div>
+      </div>
+      <a href="/" style="color:var(--muted-2);font-size:0.82rem;font-weight:600;text-decoration:none;padding-top:8px">← Subir foto</a>
+    </header>
+
+    <!-- Sin token registrado -->
+    <div id="no-token" class="no-token-wrap" style="display:none">
+      <div class="icon">📷</div>
+      <p>Este dispositivo no tiene fotos asociadas todavía.<br>Sube una foto primero y tus imágenes aparecerán aquí.</p>
+      <a href="/" class="btn btn-primary" style="display:inline-flex;width:auto;padding:0 28px;height:46px;text-decoration:none">Subir una foto</a>
+    </div>
+
+    <!-- Contenido principal -->
+    <main id="main-content" style="display:none">
+
+      <!-- Selector de mes -->
+      <div class="mes-nav">
+        <select id="mes-select"></select>
+        <span class="mes-badge" id="mes-estado"></span>
+      </div>
+
+      <!-- Banner foto del mes elegida -->
+      <div class="fdm-banner" id="fdm-banner" style="display:none">
+        <img class="fdm-thumb" id="fdm-thumb" alt="" />
+        <div class="fdm-info">
+          <div class="fdm-title">Foto del mes</div>
+          <div class="fdm-name" id="fdm-nombre"></div>
+          <div class="fdm-by-prof" id="fdm-by-prof"></div>
+        </div>
+      </div>
+
+      <!-- Grid -->
+      <div class="mis-grid" id="mis-grid"></div>
+      <div class="empty-mes" id="empty-mes" style="display:none">
+        <div class="icon">🗂</div>
+        <p>No tienes fotos en este mes.</p>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Barra de acción para elegir foto del mes -->
+  <div class="fdm-action-bar" id="fdm-action-bar">
+    <div class="fdm-action-info" id="fdm-action-info"></div>
+    <button class="btn btn-primary" id="fdm-confirm-btn">Elegir como foto del mes</button>
+    <button class="btn btn-secondary" id="fdm-cancel-btn" style="min-width:unset;padding:0 14px">Cancelar</button>
+  </div>
+
+  <!-- Lightbox -->
+  <div class="lb" id="lb" role="dialog" aria-modal="true">
+    <div class="lb-backdrop" id="lb-backdrop"></div>
+    <div class="lb-content">
+      <button class="lb-close" id="lb-close" aria-label="Cerrar">✕</button>
+      <img class="lb-img" id="lb-img" alt="" />
+      <div class="lb-caption" id="lb-caption"></div>
+      <div class="lb-counter" id="lb-counter"></div>
+    </div>
+  </div>
+  <button class="lb-nav lb-prev" id="lb-prev" aria-label="Anterior" style="display:none">&#8592;</button>
+  <button class="lb-nav lb-next" id="lb-next" aria-label="Siguiente" style="display:none">&#8594;</button>
+
+  <button class="theme-toggle" id="theme-toggle" title="Cambiar tema">
+    <span class="theme-toggle-icon">🌸</span>
+    <span class="theme-toggle-label">Modo sakura</span>
+  </button>
+
+  <script src="/js/theme.js"></script>
+  <script>
+    // ── Constantes y estado ───────────────────
+    const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                   'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+    const token       = localStorage.getItem('pf-device-token');
+    let alumnoData    = null;   // { id, nombre, curso }
+    let allJobs       = [];     // todas las fotos del token
+    let fotoDelMes    = {};     // mes → fila foto_del_mes
+    let mesActual     = '';     // "2026-03"
+    let selectedJobId = null;   // foto seleccionada para nominar
+
+    // ── Helpers ───────────────────────────────
+    function escHtml(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+    function fmtDate(str) {
+      const utc = str.includes('Z') || str.includes('+') ? str : str.replace(' ','T')+'Z';
+      return new Date(utc).toLocaleDateString('es-CL', { day:'2-digit', month:'2-digit', year:'2-digit' });
+    }
+    function mesLabel(key) {
+      const [y, m] = key.split('-');
+      return `${MESES[parseInt(m,10)-1]} ${y}`;
+    }
+    function mesActualLocal() {
+      const now = new Date();
+      return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    }
+    function esMesAbierto(mes) {
+      return mes === mesActualLocal();
+    }
+
+    // ── Cargar datos ──────────────────────────
+    async function loadData() {
+      if (!token) {
+        document.getElementById('no-token').style.display = '';
+        return;
+      }
+
+      const res  = await fetch(`/api/mis-fotos?token=${encodeURIComponent(token)}`);
+      const data = await res.json();
+
+      if (!data.success || !data.alumno) {
+        document.getElementById('no-token').style.display = '';
+        return;
+      }
+
+      alumnoData = data.alumno;
+      allJobs    = data.jobs;
+      fotoDelMes = data.fotoDelMes;
+
+      document.getElementById('alumno-info').innerHTML =
+        `<div class="alumno-chip"><strong>${escHtml(alumnoData.nombre)}</strong> · ${escHtml(alumnoData.curso)}</div>`;
+
+      if (!allJobs.length) {
+        document.getElementById('no-token').style.display = '';
+        return;
+      }
+
+      document.getElementById('main-content').style.display = '';
+      buildMesSelect();
+      renderMes();
+    }
+
+    // ── Selector de mes ───────────────────────
+    function buildMesSelect() {
+      const meses = [...new Set(allJobs.map(j => j.mes_local).filter(Boolean))].sort().reverse();
+      // Fallback: derivar mes del uploaded_at si mes_local es null (fotos antiguas)
+      allJobs.forEach(j => {
+        if (!j.mes_local) {
+          const utc = j.uploaded_at.includes('Z') ? j.uploaded_at : j.uploaded_at.replace(' ','T')+'Z';
+          const d = new Date(utc);
+          j.mes_local = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+        }
+      });
+      const mesesFinal = [...new Set(allJobs.map(j => j.mes_local))].sort().reverse();
+
+      const sel = document.getElementById('mes-select');
+      sel.innerHTML = '';
+      mesesFinal.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m; opt.textContent = mesLabel(m);
+        sel.appendChild(opt);
+      });
+
+      // Preseleccionar mes actual si tiene fotos, si no el más reciente
+      mesActual = mesesFinal.includes(mesActualLocal()) ? mesActualLocal() : mesesFinal[0];
+      sel.value = mesActual;
+      sel.addEventListener('change', () => { mesActual = sel.value; renderMes(); });
+    }
+
+    // ── Render del mes seleccionado ───────────
+    function renderMes() {
+      selectedJobId = null;
+      updateActionBar();
+
+      const jobs    = allJobs.filter(j => j.mes_local === mesActual);
+      const abierto = esMesAbierto(mesActual);
+      const fdm     = fotoDelMes[mesActual] || null;
+
+      // Estado del mes
+      const estadoEl = document.getElementById('mes-estado');
+      estadoEl.textContent = abierto ? 'Mes abierto' : 'Mes cerrado';
+      estadoEl.className   = 'mes-badge ' + (abierto ? 'mes-abierto' : 'mes-cerrado');
+
+      // Banner foto del mes
+      const banner = document.getElementById('fdm-banner');
+      if (fdm) {
+        document.getElementById('fdm-thumb').src = `/uploads/${escHtml(fdm.filename)}`;
+        document.getElementById('fdm-nombre').textContent = fdm.filename; // se actualizará con el job
+        // Buscar nombre de la foto en allJobs
+        const job = allJobs.find(j => j.id === fdm.job_id);
+        document.getElementById('fdm-nombre').textContent = job
+          ? job.original_name || `Foto #${job.id}` : `Foto #${fdm.job_id}`;
+        document.getElementById('fdm-by-prof').textContent = fdm.elegida_por === 'profesor'
+          ? 'Foto del mes seleccionada por tu profesor' : '';
+        banner.style.display = '';
+      } else {
+        banner.style.display = 'none';
+      }
+
+      // Grid
+      const grid    = document.getElementById('mis-grid');
+      const emptyEl = document.getElementById('empty-mes');
+      grid.innerHTML = '';
+
+      if (!jobs.length) {
+        emptyEl.style.display = '';
+        return;
+      }
+      emptyEl.style.display = 'none';
+
+      jobs.forEach(job => {
+        const esFdm = fdm && fdm.job_id === job.id;
+        const card  = document.createElement('div');
+        card.className = `mis-card fade-up${esFdm ? ' es-fdm' : ''}`;
+        card.dataset.id = job.id;
+        card.innerHTML = `
+          <img src="/uploads/${escHtml(job.filename)}" alt="" loading="lazy" />
+          ${esFdm ? '<div class="mis-card-badge">Foto del mes</div>' : ''}
+          <div class="mis-card-date">${fmtDate(job.uploaded_at)}</div>
+        `;
+
+        card.addEventListener('click', () => {
+          // Si el mes está cerrado o la selección fue del profesor → abrir lightbox
+          if (!abierto || (fdm && fdm.elegida_por === 'profesor')) {
+            openLb(jobs.indexOf(job), jobs);
+            return;
+          }
+          // Mes abierto: tap = seleccionar para foto del mes
+          if (selectedJobId === job.id) {
+            // Segundo tap → abrir lightbox
+            openLb(jobs.indexOf(job), jobs);
+          } else {
+            selectCard(job.id);
+          }
+        });
+
+        grid.appendChild(card);
+      });
+    }
+
+    // ── Selección de foto del mes ─────────────
+    function selectCard(jobId) {
+      selectedJobId = jobId;
+      document.querySelectorAll('.mis-card').forEach(c => {
+        c.classList.toggle('selected', Number(c.dataset.id) === jobId);
+      });
+      updateActionBar();
+    }
+
+    function updateActionBar() {
+      const bar  = document.getElementById('fdm-action-bar');
+      const info = document.getElementById('fdm-action-info');
+      if (!selectedJobId) { bar.classList.remove('visible'); return; }
+
+      const job = allJobs.find(j => j.id === selectedJobId);
+      const fdm = fotoDelMes[mesActual] || null;
+      info.innerHTML = fdm
+        ? `Reemplazará tu foto del mes de <strong>${mesLabel(mesActual)}</strong>`
+        : `Elegir como foto del mes de <strong>${mesLabel(mesActual)}</strong>`;
+      bar.classList.add('visible');
+    }
+
+    document.getElementById('fdm-cancel-btn').addEventListener('click', () => {
+      selectedJobId = null;
+      document.querySelectorAll('.mis-card').forEach(c => c.classList.remove('selected'));
+      updateActionBar();
+    });
+
+    document.getElementById('fdm-confirm-btn').addEventListener('click', async () => {
+      if (!selectedJobId) return;
+      const fdm = fotoDelMes[mesActual] || null;
+      const msg = fdm
+        ? `¿Reemplazar tu foto del mes de ${mesLabel(mesActual)}?`
+        : `¿Elegir esta foto como tu foto del mes de ${mesLabel(mesActual)}?`;
+      if (!confirm(msg)) return;
+
+      const btn = document.getElementById('fdm-confirm-btn');
+      btn.disabled = true;
+      btn.textContent = 'Guardando…';
+
+      try {
+        const res = await fetch('/api/foto-del-mes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token, job_id: selectedJobId, mes: mesActual }),
+        });
+        const data = await res.json();
+        if (!data.success) { alert(data.error || 'Error al guardar.'); return; }
+        // Actualizar estado local
+        fotoDelMes[mesActual] = data.fotaDelMes;
+        selectedJobId = null;
+        renderMes();
+      } catch {
+        alert('Error de conexión.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Elegir como foto del mes';
+      }
+    });
+
+    // ── Lightbox ──────────────────────────────
+    const lb        = document.getElementById('lb');
+    const lbImg     = document.getElementById('lb-img');
+    const lbCaption = document.getElementById('lb-caption');
+    const lbCounter = document.getElementById('lb-counter');
+    const lbClose   = document.getElementById('lb-close');
+    const lbBackdrop = document.getElementById('lb-backdrop');
+    const lbPrev    = document.getElementById('lb-prev');
+    const lbNext    = document.getElementById('lb-next');
+    let lbIndex = 0;
+    let lbList  = [];
+
+    function showLbPhoto(idx) {
+      const job = lbList[idx];
+      if (!job) return;
+      lbIndex = idx;
+      lbImg.classList.add('loading');
+      const img = new Image();
+      img.onload = () => { lbImg.src = img.src; lbImg.classList.remove('loading'); };
+      img.src = `/uploads/${job.filename}`;
+      lbCaption.textContent = fmtDate(job.uploaded_at);
+      lbCounter.textContent = `${idx + 1} / ${lbList.length}`;
+      lbPrev.disabled = idx === 0;
+      lbNext.disabled = idx === lbList.length - 1;
+    }
+    function openLb(idx, list) {
+      lbList = list;
+      lbPrev.style.display = lbNext.style.display = 'flex';
+      showLbPhoto(idx);
+      lb.classList.add('open');
+      document.body.style.overflow = 'hidden';
+    }
+    function closeLb() {
+      lb.classList.remove('open');
+      lbPrev.style.display = lbNext.style.display = 'none';
+      document.body.style.overflow = '';
+      setTimeout(() => { lbImg.src = ''; }, 250);
+    }
+    lbClose.addEventListener('click', closeLb);
+    lbBackdrop.addEventListener('click', closeLb);
+    lbPrev.addEventListener('click', () => { if (lbIndex > 0) showLbPhoto(lbIndex - 1); });
+    lbNext.addEventListener('click', () => { if (lbIndex < lbList.length - 1) showLbPhoto(lbIndex + 1); });
+    document.addEventListener('keydown', e => {
+      if (!lb.classList.contains('open')) return;
+      if (e.key === 'Escape') closeLb();
+      if (e.key === 'ArrowLeft'  && lbIndex > 0)               showLbPhoto(lbIndex - 1);
+      if (e.key === 'ArrowRight' && lbIndex < lbList.length - 1) showLbPhoto(lbIndex + 1);
+    });
+
+    loadData();
+  </script>
+</body>
+</html>

@@ -28,6 +28,12 @@ app.use('/upload', uploadRouter);
 app.use(galleryRouter);
 app.use('/admin', adminRouter);
 
+// Lista pública de alumnos activos para el formulario de upload
+app.get('/api/alumnos', (req, res) => {
+  const alumnos = db.getAllAlumnos();
+  res.json(alumnos.map(a => ({ id: a.id, nombre: a.nombre, curso: a.curso })));
+});
+
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public/index.html'));
 });

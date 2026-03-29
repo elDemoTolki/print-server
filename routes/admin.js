@@ -2,12 +2,16 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const bcrypt = require('bcrypt');
+const multer = require('multer');
 const sharp = require('sharp');
 const config = require('../config');
 const db = require('../db/database');
 const { requireAdmin } = require('../middleware/auth');
 const printRouter = require('./print');
 const { broadcast } = require('./events');
+
+// Multer solo para CSV en memoria (no escribe a disco)
+const csvUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 1 * 1024 * 1024 } });
 
 // ── Report helpers ────────────────────────────────────────────────────────────
 
@@ -317,5 +321,128 @@ router.get('/report', requireAdmin, async (req, res) => {
 });
 
 router.use('/print', printRouter);
+
+// ── Alumnos ───────────────────────────────────────────────────────────────────
+
+router.get('/api/alumnos', requireAdmin, (req, res) => {
+  const alumnos = db.getAllAlumnos();
+  // Adjuntar tokens activos a cada alumno
+  const result = alumnos.map(a => ({
+    ...a,
+    tokens: db.getTokensByAlumno(a.id),
+  }));
+  res.json(result);
+});
+
+router.post('/api/alumnos', requireAdmin, (req, res) => {
+  const nombre = (req.body.nombre || '').trim();
+  const curso  = (req.body.curso  || '').trim();
+  if (!nombre || !curso) {
+    return res.status(400).json({ success: false, error: 'Nombre y curso son obligatorios.' });
+  }
+  const alumno = db.createAlumno({ nombre, curso });
+  return res.json({ success: true, alumno });
+});
+
+router.post('/api/alumnos/import', requireAdmin, csvUpload.single('csv'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ success: false, error: 'No se recibió ningún archivo.' });
+  }
+
+  const text = req.file.buffer.toString('utf8');
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+
+  // Saltar encabezado si la primera línea contiene "nombre"
+  const start = lines[0].toLowerCase().startsWith('nombre') ? 1 : 0;
+
+  const lista = [];
+  const errores = [];
+
+  for (let i = start; i < lines.length; i++) {
+    const parts = lines[i].split(',');
+    if (parts.length < 2) { errores.push(`Línea ${i + 1}: formato inválido`); continue; }
+    const nombre = parts[0].trim();
+    const curso  = parts[1].trim();
+    if (!nombre || !curso) { errores.push(`Línea ${i + 1}: nombre o curso vacío`); continue; }
+    lista.push({ nombre, curso });
+  }
+
+  if (lista.length === 0) {
+    return res.status(400).json({ success: false, error: 'El CSV no contiene filas válidas.', errores });
+  }
+
+  db.importAlumnos(lista);
+  return res.json({ success: true, importados: lista.length, errores });
+});
+
+router.patch('/api/alumnos/:id/activo', requireAdmin, (req, res) => {
+  const id = Number(req.params.id);
+  const { activo } = req.body;
+  if (activo === undefined) {
+    return res.status(400).json({ success: false, error: 'Campo activo requerido.' });
+  }
+  db.setAlumnoActivo(id, activo);
+  return res.json({ success: true });
+});
+
+// ── Device tokens ─────────────────────────────────────────────────────────────
+
+router.patch('/api/tokens/:token/desactivar', requireAdmin, (req, res) => {
+  db.desactivarToken(req.params.token);
+  return res.json({ success: true });
+});
+
+router.patch('/api/tokens/:token/reasignar', requireAdmin, (req, res) => {
+  const alumno_id = Number(req.body.alumno_id);
+  if (!alumno_id) {
+    return res.status(400).json({ success: false, error: 'alumno_id requerido.' });
+  }
+  db.reasignarTokens(req.params.token, alumno_id);
+  return res.json({ success: true });
+});
+
+// ── Foto del mes (admin) ──────────────────────────────────────────────────────
+
+// Listado por mes con filtro de curso
+router.get('/api/foto-del-mes', requireAdmin, (req, res) => {
+  const mes = (req.query.mes || '').trim();
+  if (!mes || !/^\d{4}-\d{2}$/.test(mes)) {
+    return res.status(400).json({ success: false, error: 'Parámetro mes inválido (formato YYYY-MM).' });
+  }
+  const rows = db.getFotosDelMes(mes);
+  return res.json(rows);
+});
+
+// Meses disponibles (con al menos una foto del mes elegida)
+router.get('/api/foto-del-mes/meses', requireAdmin, (req, res) => {
+  const meses = db.getMesesConFotoDelMes();
+  return res.json(meses);
+});
+
+// Override del profesor: marcar foto del mes para un alumno
+router.post('/api/foto-del-mes/override', requireAdmin, (req, res) => {
+  const { alumno_id, job_id, mes } = req.body;
+  if (!alumno_id || !job_id || !mes) {
+    return res.status(400).json({ success: false, error: 'Faltan parámetros: alumno_id, job_id, mes.' });
+  }
+  if (!/^\d{4}-\d{2}$/.test(mes)) {
+    return res.status(400).json({ success: false, error: 'Formato de mes inválido (YYYY-MM).' });
+  }
+
+  const alumno = db.getAlumnoById(Number(alumno_id));
+  if (!alumno) return res.status(404).json({ success: false, error: 'Alumno no encontrado.' });
+
+  const job = db.getJobById(Number(job_id));
+  if (!job) return res.status(404).json({ success: false, error: 'Foto no encontrada.' });
+
+  const resultado = db.setFotoDelMes({
+    alumno_id: Number(alumno_id),
+    job_id:    Number(job_id),
+    mes,
+    elegida_por: 'profesor',
+  });
+
+  return res.json({ success: true, fotaDelMes: resultado });
+});
 
 module.exports = router;

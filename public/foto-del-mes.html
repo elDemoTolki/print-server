@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Foto del mes — Electivo de Fotografía</title>
+  <link rel="stylesheet" href="/css/app.css" />
+  <script>if(localStorage.getItem('pf-theme')==='sakura')document.documentElement.classList.add('theme-sakura');</script>
+  <style>
+    .fdm-header {
+      padding: 32px 0 20px;
+      text-align: center;
+    }
+    .fdm-header .accent-line { margin: 10px auto 0; }
+
+    /* Filtros */
+    .fdm-toolbar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 24px;
+      align-items: center;
+      justify-content: center;
+    }
+    .fdm-toolbar select {
+      width: auto;
+      min-width: 160px;
+      flex: none;
+    }
+    .fdm-count {
+      font-size: 0.8rem;
+      color: var(--muted-2);
+      font-weight: 600;
+    }
+
+    /* Grid */
+    .fdm-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 16px;
+      padding-bottom: 60px;
+    }
+    @media (min-width: 480px) {
+      .fdm-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+    }
+    @media (min-width: 768px) {
+      .fdm-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 20px; }
+    }
+
+    /* Card */
+    .fdm-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform var(--trans), box-shadow var(--trans);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .fdm-card:hover {
+      transform: translateY(-3px);
+      box-shadow: var(--shadow);
+    }
+    .fdm-card-img {
+      width: 100%;
+      aspect-ratio: 3 / 4;
+      object-fit: cover;
+      display: block;
+      transition: transform 0.4s ease;
+    }
+    .fdm-card:hover .fdm-card-img { transform: scale(1.04); }
+    .fdm-card-img-wrap { overflow: hidden; }
+
+    .fdm-card-body {
+      padding: 12px 14px 14px;
+      border-top: 1px solid var(--border);
+    }
+    .fdm-card-name {
+      font-size: 0.9rem;
+      font-weight: 700;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .fdm-card-curso {
+      font-size: 0.78rem;
+      color: var(--accent);
+      font-weight: 600;
+      margin-top: 3px;
+    }
+
+    /* Empty */
+    .fdm-empty {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--muted);
+    }
+    .fdm-empty .icon { font-size: 3rem; margin-bottom: 12px; }
+
+    /* Mes label destacado */
+    .mes-label-display {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--muted-2);
+      text-align: center;
+      margin-bottom: 20px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body class="page">
+
+  <div class="container">
+    <header class="fdm-header">
+      <p style="font-size:0.75rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted);margin-bottom:6px">Electivo de Fotografía y Multimedia</p>
+      <h1 class="title">Foto del mes</h1>
+      <div class="accent-line"></div>
+    </header>
+
+    <div class="fdm-toolbar">
+      <select id="mes-select">
+        <option value="">Cargando…</option>
+      </select>
+      <select id="curso-select">
+        <option value="">Todos los cursos</option>
+      </select>
+      <span class="fdm-count" id="fdm-count"></span>
+    </div>
+
+    <div class="mes-label-display" id="mes-label"></div>
+
+    <div class="fdm-grid" id="fdm-grid"></div>
+    <div class="fdm-empty hidden" id="fdm-empty">
+      <div class="icon">📷</div>
+      <p>Aún no hay fotos del mes elegidas para este período.</p>
+    </div>
+  </div>
+
+  <!-- Nav links -->
+  <div style="text-align:center;padding:0 0 32px;display:flex;justify-content:center;gap:20px;flex-wrap:wrap">
+    <a href="/gallery" style="color:var(--accent);font-size:0.875rem;font-weight:600;text-decoration:none">Ver galería →</a>
+    <a href="/"        style="color:var(--muted-2);font-size:0.875rem;font-weight:600;text-decoration:none">Subir foto →</a>
+  </div>
+
+  <!-- Lightbox -->
+  <div class="lb" id="lb" role="dialog" aria-modal="true">
+    <div class="lb-backdrop" id="lb-backdrop"></div>
+    <div class="lb-content">
+      <button class="lb-close" id="lb-close" aria-label="Cerrar">✕</button>
+      <img class="lb-img" id="lb-img" alt="" />
+      <div class="lb-caption" id="lb-caption"></div>
+      <div class="lb-counter" id="lb-counter"></div>
+    </div>
+  </div>
+  <button class="lb-nav lb-prev" id="lb-prev" aria-label="Anterior" style="display:none">&#8592;</button>
+  <button class="lb-nav lb-next" id="lb-next" aria-label="Siguiente" style="display:none">&#8594;</button>
+
+  <button class="theme-toggle" id="theme-toggle" title="Cambiar tema">
+    <span class="theme-toggle-icon">🌸</span>
+    <span class="theme-toggle-label">Modo sakura</span>
+  </button>
+
+  <script src="/js/theme.js"></script>
+  <script>
+    const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                   'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+    function escHtml(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+    function mesLabel(key) {
+      const [y, m] = key.split('-');
+      return `${MESES[parseInt(m,10)-1]} ${y}`;
+    }
+    function mesActualLocal() {
+      const n = new Date();
+      return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`;
+    }
+
+    let allRows = [];   // filas del mes cargado
+
+    // ── Cargar meses disponibles ──────────────
+    async function loadMeses() {
+      const res   = await fetch('/api/foto-del-mes/meses');
+      const meses = await res.json();
+
+      const sel = document.getElementById('mes-select');
+      if (!meses.length) {
+        sel.innerHTML = '<option value="">Sin fotos del mes aún</option>';
+        document.getElementById('fdm-empty').classList.remove('hidden');
+        return;
+      }
+
+      sel.innerHTML = '';
+      meses.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m; opt.textContent = mesLabel(m);
+        sel.appendChild(opt);
+      });
+
+      // Preseleccionar mes actual si está disponible, sino el más reciente
+      const actual = mesActualLocal();
+      sel.value = meses.includes(actual) ? actual : meses[0];
+      loadFotos(sel.value);
+    }
+
+    // ── Cargar fotos del mes ──────────────────
+    async function loadFotos(mes) {
+      document.getElementById('mes-label').textContent = mesLabel(mes);
+      const res = await fetch(`/api/foto-del-mes?mes=${encodeURIComponent(mes)}`);
+      allRows = await res.json();
+      buildCursoSelect();
+      render();
+    }
+
+    function buildCursoSelect() {
+      const sel     = document.getElementById('curso-select');
+      const current = sel.value;
+      const cursos  = [...new Set(allRows.map(r => r.alumno_curso))].sort();
+      sel.innerHTML = '<option value="">Todos los cursos</option>';
+      cursos.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c; opt.textContent = c;
+        sel.appendChild(opt);
+      });
+      if (cursos.includes(current)) sel.value = current;
+    }
+
+    function getFiltered() {
+      const curso = document.getElementById('curso-select').value;
+      return allRows.filter(r => !curso || r.alumno_curso === curso);
+    }
+
+    function render() {
+      const grid    = document.getElementById('fdm-grid');
+      const emptyEl = document.getElementById('fdm-empty');
+      const countEl = document.getElementById('fdm-count');
+      const rows    = getFiltered();
+
+      grid.innerHTML = '';
+      countEl.textContent = rows.length ? `${rows.length} foto${rows.length !== 1 ? 's' : ''}` : '';
+
+      if (!rows.length) {
+        emptyEl.classList.remove('hidden');
+        return;
+      }
+      emptyEl.classList.add('hidden');
+
+      rows.forEach(r => {
+        const card = document.createElement('div');
+        card.className = 'fdm-card fade-up';
+        card.innerHTML = `
+          <div class="fdm-card-img-wrap">
+            <img class="fdm-card-img" src="/uploads/${escHtml(r.filename)}" alt="${escHtml(r.alumno_nombre)}" loading="lazy" />
+          </div>
+          <div class="fdm-card-body">
+            <div class="fdm-card-name">${escHtml(r.alumno_nombre)}</div>
+            <div class="fdm-card-curso">${escHtml(r.alumno_curso)}</div>
+          </div>
+        `;
+        card.addEventListener('click', () => openLb(rows.indexOf(r), rows));
+        grid.appendChild(card);
+      });
+    }
+
+    document.getElementById('mes-select').addEventListener('change', e => {
+      if (e.target.value) loadFotos(e.target.value);
+    });
+    document.getElementById('curso-select').addEventListener('change', render);
+
+    // ── Lightbox ──────────────────────────────
+    const lb         = document.getElementById('lb');
+    const lbImg      = document.getElementById('lb-img');
+    const lbCaption  = document.getElementById('lb-caption');
+    const lbCounter  = document.getElementById('lb-counter');
+    const lbClose    = document.getElementById('lb-close');
+    const lbBackdrop = document.getElementById('lb-backdrop');
+    const lbPrev     = document.getElementById('lb-prev');
+    const lbNext     = document.getElementById('lb-next');
+    let lbIndex = 0;
+    let lbList  = [];
+
+    function showLbPhoto(idx) {
+      const r = lbList[idx];
+      if (!r) return;
+      lbIndex = idx;
+      lbImg.classList.add('loading');
+      const img = new Image();
+      img.onload = () => { lbImg.src = img.src; lbImg.classList.remove('loading'); };
+      img.src = `/uploads/${r.filename}`;
+      lbImg.alt = r.alumno_nombre;
+      lbCaption.innerHTML = `${escHtml(r.alumno_nombre)} <span>· ${escHtml(r.alumno_curso)}</span>`;
+      lbCounter.textContent = `${idx + 1} / ${lbList.length}`;
+      lbPrev.disabled = idx === 0;
+      lbNext.disabled = idx === lbList.length - 1;
+    }
+    function openLb(idx, list) {
+      lbList = list;
+      lbPrev.style.display = lbNext.style.display = 'flex';
+      showLbPhoto(idx);
+      lb.classList.add('open');
+      document.body.style.overflow = 'hidden';
+    }
+    function closeLb() {
+      lb.classList.remove('open');
+      lbPrev.style.display = lbNext.style.display = 'none';
+      document.body.style.overflow = '';
+      setTimeout(() => { lbImg.src = ''; }, 250);
+    }
+
+    lbClose.addEventListener('click', closeLb);
+    lbBackdrop.addEventListener('click', closeLb);
+    lbPrev.addEventListener('click', () => { if (lbIndex > 0) showLbPhoto(lbIndex - 1); });
+    lbNext.addEventListener('click', () => { if (lbIndex < lbList.length - 1) showLbPhoto(lbIndex + 1); });
+    document.addEventListener('keydown', e => {
+      if (!lb.classList.contains('open')) return;
+      if (e.key === 'Escape') closeLb();
+      if (e.key === 'ArrowLeft'  && lbIndex > 0)               showLbPhoto(lbIndex - 1);
+      if (e.key === 'ArrowRight' && lbIndex < lbList.length - 1) showLbPhoto(lbIndex + 1);
+    });
+
+    loadMeses();
+  </script>
+</body>
+</html>

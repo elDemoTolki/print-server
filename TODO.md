@@ -17,19 +17,23 @@ Permitir que los visitantes de la galería reaccionen a las fotos con un like o 
 
 ---
 
-## 2. Panel de alumno — ver y eliminar fotos propias
+## ~~2. Panel de alumno — ver fotos propias~~ ✅ Implementado
 
-Que cada alumno pueda acceder a una vista personalizada con sus fotos y eliminarlas si lo desea.
+Panel personal donde el alumno puede ver sus fotos filtradas por mes y elegir su foto del mes.
 
-**Ideas de implementación:**
-- Identificación ligera del alumno: token generado al subir la primera foto, guardado en `localStorage`
-- Ruta `GET /mis-fotos` → muestra solo las fotos asociadas al token del dispositivo
-- Ruta `DELETE /mis-fotos/:id` → validación de que el token coincide con el dueño del job
-- Alternativa más simple: al subir la foto, mostrar un enlace con token de acceso único para gestionar esa foto
+**Implementado:**
+- Tabla `alumnos (id, nombre, curso, activo)` — lista cerrada gestionada por el profesor
+- Tabla `device_tokens (token, alumno_id, ip_primer_uso, ua_primer_uso, vinculado_at, activo)` — vinculación sin login
+- Formulario de upload con `<select>` de nombres filtrado por curso (sin texto libre)
+- `device_token` UUID generado en `localStorage`, enviado transparente en cada upload
+- IP y User-Agent guardados como auditoría al vincular el primer token
+- Página `/mis-fotos`: fotos del alumno filtradas por mes, indicador mes abierto/cerrado
+- El profesor puede reasignar tokens y desactivar dispositivos desde el panel admin (tab Alumnos)
+- Importación de lista de alumnos desde CSV (`nombre,curso`) — sin duplicados
 
 ---
 
-## 3. Datos adicionales al subir imagen
+## ~~3. Datos adicionales al subir imagen~~ — Pendiente
 
 Permitir que el alumno ingrese más información junto con la foto.
 
@@ -49,77 +53,39 @@ Permitir que el alumno ingrese más información junto con la foto.
 
 Agregar un selector de mes en la galería y en el panel admin para filtrar las fotos por período.
 
-**Ideas de implementación:**
-- Filtro en el frontend: extraer mes/año de `uploaded_at` y agrupar
-- Selector tipo `<select>` con los meses disponibles (generado dinámicamente desde los datos)
+**Implementado:**
+- Filtro en el frontend: extrae mes/año de `uploaded_at` y agrupa
+- Selector `<select>` con los meses disponibles (generado dinámicamente desde los datos)
 - Combinable con los filtros de alumno y curso ya existentes
 - En admin, útil para revisar producción por mes
 
 ---
 
-## 5. Log de dispositivo por imagen (trazabilidad)
+## ~~5. Log de dispositivo por imagen (trazabilidad)~~ ✅ Implementado
 
-Registrar información del dispositivo que subió cada imagen para poder rastrear el origen en caso de contenido inapropiado.
+Registrar información del dispositivo que subió cada imagen para rastrear el origen en caso de contenido inapropiado.
 
-**Datos a registrar:**
-- IP del cliente (`req.ip`)
-- User-Agent del navegador (`req.headers['user-agent']`)
-- Timestamp exacto
-
-**Cambios requeridos:**
-- Agregar columnas `uploader_ip` y `uploader_ua` a la tabla `jobs`
-- Registrar los datos en `routes/upload.js` al crear el job
-- Mostrar esta información en el panel admin (columna oculta o sección de detalle al expandir un job)
-- Considerar implicancias de privacidad: informar en los términos de uso de la plataforma
+**Implementado:**
+- `ip_primer_uso` y `ua_primer_uso` guardados en `device_tokens` al vincular el primer token
+- `owner_token` en `jobs` permite trazar qué dispositivo subió cada foto
+- Visible en el panel admin (tab Alumnos → tokens del alumno)
 
 ---
 
-## 6. Votación — Foto del mes
+## ~~6. Votación — Foto del mes~~ ✅ Implementado
 
-El profesor habilita una votación desde el panel admin seleccionando las fotos candidatas. Los alumnos votan desde la galería y el profesor ve el ranking final para elegir las ganadoras.
+El alumno elige su foto del mes; el profesor puede hacer override y ver todas las selecciones.
 
-**Flujo completo:**
-1. Profesor selecciona fotos candidatas desde el panel admin y activa la votación
-2. En la galería aparece un banner "Votación activa — elige tus 3 favoritas"
-3. Cada alumno (identificado por cookie/localStorage) puede votar hasta 3 fotos distintas
-4. El profesor puede ver en tiempo real el ranking de votos en el panel admin
-5. El profesor desactiva la votación y anuncia las 3 ganadoras (las marca como ganadoras)
-6. Las ganadoras se destacan visualmente en la galería
-
-**Tablas nuevas sugeridas:**
-```sql
-CREATE TABLE polls (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  title TEXT NOT NULL,
-  active INTEGER NOT NULL DEFAULT 1,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  closed_at DATETIME
-);
-
-CREATE TABLE poll_candidates (
-  poll_id INTEGER NOT NULL REFERENCES polls(id),
-  job_id  INTEGER NOT NULL REFERENCES jobs(id),
-  winner  INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (poll_id, job_id)
-);
-
-CREATE TABLE poll_votes (
-  id         INTEGER PRIMARY KEY AUTOINCREMENT,
-  poll_id    INTEGER NOT NULL REFERENCES polls(id),
-  job_id     INTEGER NOT NULL REFERENCES jobs(id),
-  voter_token TEXT NOT NULL,
-  voted_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-**Rutas nuevas sugeridas:**
-- `POST /admin/poll` → crear votación con fotos seleccionadas
-- `DELETE /admin/poll/:id` → cerrar votación
-- `PATCH /admin/poll/:id/winners` → marcar ganadoras
-- `GET /admin/poll/:id/results` → ranking de votos
-- `POST /gallery/vote` → alumno emite su voto (valida token + máximo 3 votos)
-- `GET /gallery/poll` → estado actual de la votación (activa/inactiva, candidatas)
+**Implementado:**
+- Tabla `foto_del_mes (id, alumno_id, job_id, mes TEXT, elegida_at, elegida_por)` con `UNIQUE(alumno_id, mes)`
+- `mes_local` calculado en Node.js con hora local del servidor al insertar (evita desfase UTC)
+- El alumno elige 1 foto por mes desde `/mis-fotos` mientras el mes esté abierto (mes calendario actual)
+- Puede cambiar su elección antes del cierre; el mes se cierra automáticamente al cambiar el calendario
+- El profesor hace override desde el panel admin: elige foto, alumno y mes (libre, sin restricción al mes actual)
+- Si el profesor hizo el override, el alumno ve "Foto del mes seleccionada por tu profesor" y no puede cambiarla
+- Panel admin tab "Foto del mes": grid filtrable por mes y curso, botón "Cambiar" por foto
+- Página pública `/foto-del-mes`: grid de fotos elegidas filtrable por mes y curso, lightbox
 
 ---
 
-*Última actualización: 2026-03-28*
+*Última actualización: 2026-03-29*

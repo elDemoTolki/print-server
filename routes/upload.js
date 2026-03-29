@@ -37,17 +37,47 @@ router.post('/', upload.single('photo'), (req, res) => {
     return res.status(400).json({ success: false, error: 'No se recibió ninguna imagen.' });
   }
 
-  const alumno = (req.body.alumno || '').trim();
-  const curso = (req.body.curso || '').trim();
+  // Soporte para dos modos:
+  // - Modo alumno (nuevo): envía alumno_id + device_token
+  // - Modo legado / profesor: envía alumno + curso como texto libre
+  const alumno_id   = req.body.alumno_id ? Number(req.body.alumno_id) : null;
+  const device_token = (req.body.device_token || '').trim() || null;
 
-  if (!alumno) return res.status(400).json({ success: false, error: 'El nombre del alumno es obligatorio.' });
-  if (!curso) return res.status(400).json({ success: false, error: 'El curso es obligatorio.' });
+  let alumno, curso;
+
+  if (alumno_id) {
+    const alumnoRow = db.getAlumnoById(alumno_id);
+    if (!alumnoRow) {
+      return res.status(400).json({ success: false, error: 'Alumno no encontrado.' });
+    }
+    alumno = alumnoRow.nombre;
+    curso  = alumnoRow.curso;
+
+    // Vincular token si viene y no está registrado aún
+    if (device_token) {
+      const existing = db.getTokenInfo(device_token);
+      if (!existing) {
+        db.vincularToken({
+          token: device_token,
+          alumno_id,
+          ip: req.ip,
+          ua: req.headers['user-agent'] || null,
+        });
+      }
+    }
+  } else {
+    alumno = (req.body.alumno || '').trim();
+    curso  = (req.body.curso  || '').trim();
+    if (!alumno) return res.status(400).json({ success: false, error: 'El nombre del alumno es obligatorio.' });
+    if (!curso)  return res.status(400).json({ success: false, error: 'El curso es obligatorio.' });
+  }
 
   const job = db.createJob({
     filename: req.file.filename,
     original_name: req.file.originalname,
     alumno,
     curso,
+    owner_token: device_token,
   });
 
   broadcast('new-photo', {

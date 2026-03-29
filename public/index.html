@@ -59,24 +59,25 @@
             </div>
           </div>
 
-          <!-- Nombre -->
-          <div>
-            <label class="field-label" for="alumno">Nombre del alumno</label>
-            <input id="alumno" name="alumno" type="text" placeholder="Tu nombre completo" required />
-          </div>
-
           <!-- Curso -->
           <div>
-            <label class="field-label" for="curso">Curso</label>
-            <select id="curso" name="curso" required>
-              <option value="" disabled selected>Selecciona tu curso</option>
-              <option value="3 Medio A">3 Medio A</option>
-              <option value="3 Medio B">3 Medio B</option>
-              <option value="3 Medio C">3 Medio C</option>
-              <option value="3 Medio D">3 Medio D</option>
-              <option value="3 Medio E">3 Medio E</option>
-              <option value="3 Medio F">3 Medio F</option>
+            <label class="field-label" for="curso-select">Curso</label>
+            <select id="curso-select" required>
+              <option value="" disabled selected>Selecciona tu curso…</option>
             </select>
+          </div>
+
+          <!-- Nombre (dinámico según curso) -->
+          <div id="nombre-wrap" style="display:none">
+            <label class="field-label" for="alumno-select">Tu nombre</label>
+            <select id="alumno-select" required>
+              <option value="" disabled selected>Selecciona tu nombre…</option>
+            </select>
+          </div>
+
+          <!-- Aviso cuando no hay alumnos cargados -->
+          <div id="no-alumnos-msg" class="error-msg hidden">
+            No hay alumnos registrados aún. Pide a tu profesor que cargue la lista.
           </div>
 
           <!-- Error -->
@@ -89,9 +90,13 @@
         </form>
       </div>
 
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:0 2px">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:0 2px;flex-wrap:wrap;gap:4px">
         <a href="/gallery" class="gallery-link" style="margin-top:0">Ver galería →</a>
-        <a href="/admin" class="gallery-link" style="margin-top:0;color:var(--muted-2);font-size:0.8rem">Panel admin</a>
+        <div style="display:flex;gap:12px;align-items:center">
+          <a href="/mis-fotos"    class="gallery-link" style="margin-top:0;font-size:0.85rem">Mis fotos</a>
+          <a href="/foto-del-mes" class="gallery-link" style="margin-top:0;font-size:0.85rem">Foto del mes</a>
+          <a href="/admin"        class="gallery-link" style="margin-top:0;color:var(--muted-2);font-size:0.8rem">Panel admin</a>
+        </div>
       </div>
     </main>
   </div>
@@ -107,21 +112,99 @@
 
   <script src="/js/theme.js"></script>
   <script>
-    const form        = document.getElementById('upload-form');
-    const fileInput   = document.getElementById('photo');
-    const uploadZone  = document.getElementById('upload-zone');
-    const placeholder = document.getElementById('upload-placeholder');
-    const previewImg  = document.getElementById('preview-img');
+    const form         = document.getElementById('upload-form');
+    const fileInput    = document.getElementById('photo');
+    const uploadZone   = document.getElementById('upload-zone');
+    const placeholder  = document.getElementById('upload-placeholder');
+    const previewImg   = document.getElementById('preview-img');
     const previewBadge = document.getElementById('preview-badge');
-    const errorMsg    = document.getElementById('error-msg');
-    const submitBtn   = document.getElementById('submit-btn');
-    const toast       = document.getElementById('toast');
+    const errorMsg     = document.getElementById('error-msg');
+    const submitBtn    = document.getElementById('submit-btn');
+    const toast        = document.getElementById('toast');
+    const cursoSelect  = document.getElementById('curso-select');
+    const alumnoSelect = document.getElementById('alumno-select');
+    const nombreWrap   = document.getElementById('nombre-wrap');
+    const noAlumnosMsg = document.getElementById('no-alumnos-msg');
 
     let toastTimer;
+    let allAlumnos = [];   // [{ id, nombre, curso }]
 
-    // ── Preview handling ──────────────────────
+    // ── Device token ──────────────────────────
+    // UUID v4 simple, no requiere crypto.randomUUID (compatibilidad móvil)
+    function genUUID() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = Math.random() * 16 | 0;
+        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+      });
+    }
+    function getDeviceToken() {
+      let t = localStorage.getItem('pf-device-token');
+      if (!t) { t = genUUID(); localStorage.setItem('pf-device-token', t); }
+      return t;
+    }
+
+    // ── Cargar alumnos ────────────────────────
+    async function loadAlumnos() {
+      try {
+        const res = await fetch('/api/alumnos');
+        allAlumnos = await res.json();
+      } catch {
+        allAlumnos = [];
+      }
+
+      if (!allAlumnos.length) {
+        noAlumnosMsg.classList.remove('hidden');
+        submitBtn.disabled = true;
+        return;
+      }
+
+      // Poblar cursos únicos
+      const cursos = [...new Set(allAlumnos.map(a => a.curso))].sort();
+      cursoSelect.innerHTML = '<option value="" disabled selected>Selecciona tu curso…</option>';
+      cursos.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c; opt.textContent = c;
+        cursoSelect.appendChild(opt);
+      });
+
+      // Si el token ya está en localStorage con alumno_id guardado, preseleccionar
+      const savedId = localStorage.getItem('pf-alumno-id');
+      if (savedId) {
+        const alumno = allAlumnos.find(a => String(a.id) === savedId);
+        if (alumno) {
+          cursoSelect.value = alumno.curso;
+          buildAlumnoSelect(alumno.curso);
+          alumnoSelect.value = String(alumno.id);
+        }
+      }
+    }
+
+    function buildAlumnoSelect(curso) {
+      const lista = allAlumnos.filter(a => a.curso === curso);
+      alumnoSelect.innerHTML = '<option value="" disabled selected>Selecciona tu nombre…</option>';
+      lista.forEach(a => {
+        const opt = document.createElement('option');
+        opt.value = String(a.id); opt.textContent = a.nombre;
+        alumnoSelect.appendChild(opt);
+      });
+      nombreWrap.style.display = lista.length ? '' : 'none';
+    }
+
+    cursoSelect.addEventListener('change', () => {
+      buildAlumnoSelect(cursoSelect.value);
+      nombreWrap.style.display = '';
+      hideError();
+    });
+
+    alumnoSelect.addEventListener('change', () => {
+      if (alumnoSelect.value) {
+        localStorage.setItem('pf-alumno-id', alumnoSelect.value);
+      }
+      hideError();
+    });
+
+    // ── Preview ───────────────────────────────
     function showPreview(file) {
-      if (!file) return;
       const url = URL.createObjectURL(file);
       previewImg.src = url;
       previewImg.classList.add('show');
@@ -129,7 +212,6 @@
       previewBadge.textContent = '📎 ' + file.name;
       previewBadge.classList.add('show');
     }
-
     function clearPreview() {
       previewImg.classList.remove('show');
       previewImg.src = '';
@@ -139,21 +221,15 @@
     }
 
     fileInput.addEventListener('change', () => {
-      const file = fileInput.files[0];
-      if (file) showPreview(file);
+      if (fileInput.files[0]) showPreview(fileInput.files[0]);
       else clearPreview();
       hideError();
     });
 
     // ── Drag & drop ───────────────────────────
-    uploadZone.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      uploadZone.classList.add('drag-over');
-    });
-    uploadZone.addEventListener('dragleave', () => {
-      uploadZone.classList.remove('drag-over');
-    });
-    uploadZone.addEventListener('drop', (e) => {
+    uploadZone.addEventListener('dragover',  e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+    uploadZone.addEventListener('dragleave', ()  => uploadZone.classList.remove('drag-over'));
+    uploadZone.addEventListener('drop', e => {
       e.preventDefault();
       uploadZone.classList.remove('drag-over');
       const file = e.dataTransfer.files[0];
@@ -166,29 +242,23 @@
     });
 
     // ── Error / toast ─────────────────────────
-    function showError(msg) {
-      errorMsg.textContent = msg;
-      errorMsg.classList.remove('hidden');
-    }
-    function hideError() {
-      errorMsg.classList.add('hidden');
-    }
+    function showError(msg) { errorMsg.textContent = msg; errorMsg.classList.remove('hidden'); }
+    function hideError()    { errorMsg.classList.add('hidden'); }
     function showToast(msg) {
       clearTimeout(toastTimer);
       toast.textContent = msg;
       toast.classList.add('show');
     }
-    function hideToast() {
-      toast.classList.remove('show');
-    }
+    function hideToast() { toast.classList.remove('show'); }
 
-    // ── Reset form ────────────────────────────
+    // ── Reset ─────────────────────────────────
     function resetForm() {
-      form.reset();
+      fileInput.value = '';
       clearPreview();
       hideError();
       submitBtn.disabled = false;
       submitBtn.textContent = 'Subir foto';
+      // No resetear curso/alumno — el alumno probablemente sube otra foto del mismo curso
     }
 
     // ── Submit ────────────────────────────────
@@ -196,27 +266,30 @@
       e.preventDefault();
       hideError();
 
-      const alumno = document.getElementById('alumno').value.trim();
-      const curso  = document.getElementById('curso').value;
-      const photo  = fileInput.files[0];
+      const alumno_id = alumnoSelect.value;
+      const photo     = fileInput.files[0];
 
-      if (!photo)  return showError('Selecciona una foto antes de continuar.');
-      if (!alumno) return showError('Ingresa tu nombre completo.');
-      if (!curso)  return showError('Selecciona tu curso.');
+      if (!photo)     return showError('Selecciona una foto antes de continuar.');
+      if (!cursoSelect.value) return showError('Selecciona tu curso.');
+      if (!alumno_id) return showError('Selecciona tu nombre.');
 
       submitBtn.disabled = true;
       submitBtn.textContent = 'Subiendo…';
 
+      const alumno = allAlumnos.find(a => String(a.id) === alumno_id);
+
+      const fd = new FormData();
+      fd.append('photo', photo);
+      fd.append('alumno_id', alumno_id);
+      fd.append('device_token', getDeviceToken());
+
       try {
-        const res  = await fetch('/upload', { method: 'POST', body: new FormData(form) });
+        const res  = await fetch('/upload', { method: 'POST', body: fd });
         const json = await res.json();
 
         if (json.success) {
-          showToast('✓ ¡Foto subida! — ' + alumno + ' · ' + curso);
-          toastTimer = setTimeout(() => {
-            hideToast();
-            resetForm();
-          }, 2800);
+          showToast(`✓ ¡Foto subida! — ${alumno ? alumno.nombre : ''} · ${cursoSelect.value}`);
+          toastTimer = setTimeout(() => { hideToast(); resetForm(); }, 2800);
         } else {
           showError(json.error || 'Error al subir la imagen.');
           submitBtn.disabled = false;
@@ -228,6 +301,8 @@
         submitBtn.textContent = 'Subir foto';
       }
     });
+
+    loadAlumnos();
   </script>
 </body>
 </html>

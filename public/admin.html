@@ -138,6 +138,185 @@
       border-radius: var(--radius-sm);
     }
 
+    /* Tabs */
+    .admin-tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0;
+    }
+    .admin-tab {
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--muted-2);
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.875rem;
+      font-weight: 600;
+      padding: 8px 14px 10px;
+      margin-bottom: -1px;
+      transition: color var(--trans), border-color var(--trans);
+    }
+    .admin-tab:hover { color: var(--text); }
+    .admin-tab.active { color: var(--text); border-bottom-color: var(--accent); }
+    .admin-pane { display: none; }
+    .admin-pane.active { display: block; }
+
+    /* Alumnos */
+    .alumnos-toolbar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+      align-items: center;
+    }
+    .alumnos-toolbar input,
+    .alumnos-toolbar select {
+      flex: 1;
+      min-width: 130px;
+      max-width: 200px;
+    }
+    .alumnos-table th, .alumnos-table td { vertical-align: middle; }
+    .token-list { display: flex; flex-direction: column; gap: 4px; }
+    .token-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.75rem;
+      color: var(--muted-2);
+    }
+    .token-item .token-code {
+      font-family: monospace;
+      background: var(--surface-2);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      max-width: 90px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .token-item.inactive { opacity: 0.4; }
+    .btn-xs {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted-2);
+      padding: 2px 8px;
+      height: 22px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: inherit;
+      white-space: nowrap;
+    }
+    .btn-xs:hover { color: var(--text); border-color: var(--text); }
+    .btn-xs.danger { border-color: rgba(239,68,68,0.3); color: var(--red); }
+    .btn-xs.danger:hover { background: rgba(239,68,68,0.1); border-color: var(--red); }
+    .import-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      text-align: center;
+      color: var(--muted-2);
+      font-size: 0.875rem;
+      cursor: pointer;
+      transition: border-color var(--trans), color var(--trans);
+      margin-bottom: 16px;
+    }
+    .import-zone:hover { border-color: var(--accent); color: var(--text); }
+    .import-status {
+      font-size: 0.82rem;
+      padding: 8px 12px;
+      border-radius: var(--radius-sm);
+      margin-bottom: 12px;
+      display: none;
+    }
+
+    /* Foto del mes */
+    .fdm-filters {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+      align-items: center;
+    }
+    .fdm-filters select { width: auto; min-width: 160px; }
+    .fdm-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 14px;
+      margin-bottom: 40px;
+    }
+    .fdm-card {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+    }
+    .fdm-card img {
+      width: 100%;
+      aspect-ratio: 3/4;
+      object-fit: cover;
+      display: block;
+      cursor: zoom-in;
+    }
+    .fdm-card-body { padding: 10px 12px 12px; }
+    .fdm-card-name { font-weight: 700; font-size: 0.875rem; }
+    .fdm-card-curso { font-size: 0.78rem; color: var(--muted-2); margin-top: 2px; }
+    .fdm-card-meta  {
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-top: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .fdm-card-by-prof {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: var(--accent);
+      background: rgba(240,192,64,0.1);
+      padding: 2px 7px;
+      border-radius: 100px;
+    }
+    .fdm-card-actions { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+
+    /* Override modal */
+    .override-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.65);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 300;
+    }
+    .override-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px 24px 22px;
+      width: min(380px, 92vw);
+    }
+    .override-title {
+      font-weight: 700; font-size: 1rem;
+      margin-bottom: 16px;
+    }
+    .override-preview {
+      width: 100%;
+      aspect-ratio: 3/2;
+      object-fit: cover;
+      border-radius: var(--radius-sm);
+      margin-bottom: 14px;
+      border: 1px solid var(--border);
+    }
+    .override-field { margin-bottom: 12px; }
+    .override-field label { display: block; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 5px; }
+
     /* Size modal */
     .size-overlay {
       position: fixed; inset: 0;
@@ -183,6 +362,16 @@
     </header>
 
     <main class="admin-body">
+
+      <!-- Tabs -->
+      <div class="admin-tabs">
+        <button class="admin-tab active" data-tab="fotos">Fotos</button>
+        <button class="admin-tab" data-tab="alumnos">Alumnos</button>
+        <button class="admin-tab" data-tab="foto-del-mes">Foto del mes</button>
+      </div>
+
+      <!-- ═══ PANEL FOTOS ══════════════════════════════════════════════════ -->
+      <div class="admin-pane active" id="pane-fotos">
 
       <!-- Subida profesora -->
       <div class="card prof-upload" id="prof-upload-section">
@@ -255,7 +444,111 @@
         </div>
       </div>
 
+      </div><!-- /pane-fotos -->
+
+      <!-- ═══ PANEL ALUMNOS ════════════════════════════════════════════════ -->
+      <div class="admin-pane" id="pane-alumnos">
+
+        <!-- Import CSV -->
+        <div class="import-zone" id="import-zone">
+          📄 Arrastra un CSV aquí, o haz clic para seleccionar<br>
+          <span style="font-size:0.78rem;color:var(--muted)">Formato: nombre,curso (una fila por alumno)</span>
+        </div>
+        <input type="file" id="csv-file" accept=".csv,text/csv" style="display:none" />
+        <div class="import-status" id="import-status"></div>
+
+        <!-- Agregar alumno manual -->
+        <div class="card" style="padding:14px 16px;margin-bottom:16px">
+          <div style="font-weight:700;font-size:0.875rem;margin-bottom:10px">Agregar alumno</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <input type="text" id="new-nombre" placeholder="Nombre completo" style="flex:2;min-width:160px" />
+            <input type="text" id="new-curso"  placeholder="Curso (ej: 3° Medio A)" style="flex:1;min-width:130px" />
+            <button class="btn" id="add-alumno-btn" style="width:auto;height:38px;padding:0 18px">Agregar</button>
+          </div>
+        </div>
+
+        <!-- Filtros alumnos -->
+        <div class="alumnos-toolbar">
+          <input type="text" id="filter-alumno-name" placeholder="Buscar alumno…" />
+          <select id="filter-alumno-curso">
+            <option value="">Todos los cursos</option>
+          </select>
+          <span class="filter-count" id="alumnos-count"></span>
+        </div>
+
+        <!-- Tabla alumnos desktop -->
+        <div class="admin-desktop card card-overflow">
+          <table class="admin-table alumnos-table">
+            <thead>
+              <tr>
+                <th>Alumno</th>
+                <th>Curso</th>
+                <th>Dispositivos</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="alumnos-table-body"></tbody>
+          </table>
+          <div id="alumnos-table-empty" class="empty-state hidden">
+            <div class="icon">👥</div>
+            <p>Sin alumnos registrados.</p>
+          </div>
+        </div>
+
+        <!-- Cards alumnos mobile -->
+        <div class="admin-mobile">
+          <div id="alumnos-cards"></div>
+          <div id="alumnos-cards-empty" class="empty-state hidden">
+            <div class="icon">👥</div>
+            <p>Sin alumnos registrados.</p>
+          </div>
+        </div>
+
+      </div><!-- /pane-alumnos -->
+
+      <!-- ═══ PANEL FOTO DEL MES ══════════════════════════════════════════ -->
+      <div class="admin-pane" id="pane-foto-del-mes">
+
+        <div class="fdm-filters">
+          <select id="fdm-mes-select">
+            <option value="">Selecciona un mes…</option>
+          </select>
+          <select id="fdm-curso-select">
+            <option value="">Todos los cursos</option>
+          </select>
+          <span class="filter-count" id="fdm-count"></span>
+        </div>
+
+        <div class="fdm-grid" id="fdm-grid"></div>
+        <div id="fdm-empty" class="empty-state hidden">
+          <div class="icon">📷</div>
+          <p>No hay fotos del mes elegidas para este período.</p>
+        </div>
+
+      </div><!-- /pane-foto-del-mes -->
+
     </main>
+  </div>
+
+  <!-- Modal override foto del mes -->
+  <div class="override-overlay" id="override-modal" style="display:none" role="dialog" aria-modal="true">
+    <div class="override-box">
+      <p class="override-title">Marcar como foto del mes</p>
+      <img class="override-preview" id="override-preview" alt="" />
+      <div class="override-field">
+        <label for="override-alumno">Alumno</label>
+        <select id="override-alumno"></select>
+      </div>
+      <div class="override-field">
+        <label for="override-mes">Mes</label>
+        <select id="override-mes"></select>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:6px">
+        <button class="btn" id="override-confirm-btn" style="height:38px;font-size:0.875rem">Confirmar</button>
+        <button class="btn btn-secondary" id="override-cancel-btn">Cancelar</button>
+      </div>
+    </div>
   </div>
 
   <!-- Modal tamaño de impresión -->
@@ -527,6 +820,7 @@
           <td>
             <div class="actions-cell">
               <button class="btn btn-print" data-action="print">🖨 Imprimir</button>
+              <button class="btn-xs" data-action="fdm-override" title="Marcar como foto del mes">⭐ Foto mes</button>
               <button class="btn-delete" data-action="delete">🗑 Eliminar</button>
             </div>
           </td>
@@ -536,6 +830,9 @@
         });
         tr.querySelector('[data-action="delete"]').addEventListener('click', function() {
           deleteJob(job.id, job.alumno, this);
+        });
+        tr.querySelector('[data-action="fdm-override"]').addEventListener('click', () => {
+          openOverrideModalFromJob(job);
         });
         tr.querySelector('.thumb-wrap').addEventListener('click', () => {
           openLb(jobs.indexOf(job));
@@ -556,8 +853,9 @@
               <span class="print-count"><strong>${job.print_count}</strong>×</span>
               <span class="print-count">♥ ${job.like_count || 0}</span>
             </div>
-            <div style="display:flex;gap:6px;margin-top:8px">
+            <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
               <button class="btn btn-print" data-action="print" style="flex:1">🖨 Imprimir</button>
+              <button class="btn-xs" data-action="fdm-override" style="height:36px;padding:0 10px">⭐</button>
               <button class="btn-delete" data-action="delete">🗑</button>
             </div>
           </div>
@@ -567,6 +865,9 @@
         });
         card.querySelector('[data-action="delete"]').addEventListener('click', function() {
           deleteJob(job.id, job.alumno, this);
+        });
+        card.querySelector('[data-action="fdm-override"]').addEventListener('click', () => {
+          openOverrideModalFromJob(job);
         });
         card.querySelector('.thumb-wrap').addEventListener('click', () => {
           openLb(jobs.indexOf(job));
@@ -677,6 +978,404 @@
         window.location.href = `/admin/report?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
       });
     })();
+
+    // ── Tabs ──────────────────────────────────
+    document.querySelectorAll('.admin-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.admin-pane').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(`pane-${tab.dataset.tab}`).classList.add('active');
+        if (tab.dataset.tab === 'alumnos')      loadAlumnos();
+        if (tab.dataset.tab === 'foto-del-mes') loadFdmMeses();
+      });
+    });
+
+    // ── Alumnos ───────────────────────────────
+    let allAlumnos = [];
+
+    function buildAlumnoCursoSelect() {
+      const sel = document.getElementById('filter-alumno-curso');
+      const current = sel.value;
+      const cursos = [...new Set(allAlumnos.map(a => a.curso))].sort();
+      sel.innerHTML = '<option value="">Todos los cursos</option>';
+      cursos.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c; opt.textContent = c;
+        sel.appendChild(opt);
+      });
+      if (cursos.includes(current)) sel.value = current;
+    }
+
+    function getFilteredAlumnos() {
+      const q     = document.getElementById('filter-alumno-name').value.trim().toLowerCase();
+      const curso = document.getElementById('filter-alumno-curso').value;
+      return allAlumnos.filter(a =>
+        (!q     || a.nombre.toLowerCase().includes(q)) &&
+        (!curso || a.curso === curso)
+      );
+    }
+
+    function renderAlumnos(list) {
+      const tbody      = document.getElementById('alumnos-table-body');
+      const cards      = document.getElementById('alumnos-cards');
+      const tableEmpty = document.getElementById('alumnos-table-empty');
+      const cardsEmpty = document.getElementById('alumnos-cards-empty');
+      const countEl    = document.getElementById('alumnos-count');
+
+      tbody.innerHTML = '';
+      cards.innerHTML = '';
+      countEl.textContent = list.length !== allAlumnos.length
+        ? `${list.length} de ${allAlumnos.length}` : `${allAlumnos.length} alumnos`;
+
+      if (!list.length) {
+        tableEmpty.classList.remove('hidden');
+        cardsEmpty.classList.remove('hidden');
+        return;
+      }
+      tableEmpty.classList.add('hidden');
+      cardsEmpty.classList.add('hidden');
+
+      list.forEach(a => {
+        const tokensHtml = a.tokens.length
+          ? a.tokens.map(t => `
+              <div class="token-item ${t.activo ? '' : 'inactive'}">
+                <span class="token-code" title="${escHtml(t.token)}">${escHtml(t.token.slice(0, 8))}…</span>
+                ${t.activo
+                  ? `<button class="btn-xs danger" data-action="desactivar-token" data-token="${escHtml(t.token)}">Desactivar</button>`
+                  : '<span style="font-size:0.7rem">inactivo</span>'}
+              </div>`).join('')
+          : '<span style="font-size:0.78rem;color:var(--muted)">Sin dispositivo</span>';
+
+        const activoBtn = a.activo
+          ? `<button class="btn-xs danger" data-action="toggle-activo" data-id="${a.id}" data-activo="1">Desactivar</button>`
+          : `<button class="btn-xs" data-action="toggle-activo" data-id="${a.id}" data-activo="0">Activar</button>`;
+
+        // Desktop row
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><div class="job-name">${escHtml(a.nombre)}</div></td>
+          <td><div class="job-course">${escHtml(a.curso)}</div></td>
+          <td><div class="token-list">${tokensHtml}</div></td>
+          <td>${a.activo
+            ? '<span class="badge badge-printed">Activo</span>'
+            : '<span class="badge badge-pending">Inactivo</span>'}</td>
+          <td><div class="actions-cell">${activoBtn}</div></td>
+        `;
+        tbody.appendChild(tr);
+
+        // Mobile card
+        const card = document.createElement('div');
+        card.className = 'job-card fade-up';
+        card.innerHTML = `
+          <div class="info" style="flex:1;min-width:0">
+            <div class="name">${escHtml(a.nombre)}</div>
+            <div class="meta">${escHtml(a.curso)}</div>
+            <div style="margin-top:6px"><div class="token-list">${tokensHtml}</div></div>
+            <div style="display:flex;gap:6px;margin-top:8px;align-items:center">
+              ${a.activo
+                ? '<span class="badge badge-printed">Activo</span>'
+                : '<span class="badge badge-pending">Inactivo</span>'}
+              ${activoBtn}
+            </div>
+          </div>
+        `;
+        cards.appendChild(card);
+      });
+
+      // Delegación de eventos
+      [tbody, cards].forEach(container => {
+        container.querySelectorAll('[data-action="desactivar-token"]').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            if (!confirm('¿Desactivar este dispositivo?')) return;
+            await fetch(`/admin/api/tokens/${encodeURIComponent(btn.dataset.token)}/desactivar`, { method: 'PATCH' });
+            loadAlumnos();
+          });
+        });
+        container.querySelectorAll('[data-action="toggle-activo"]').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const nuevoActivo = btn.dataset.activo === '1' ? 0 : 1;
+            await fetch(`/admin/api/alumnos/${btn.dataset.id}/activo`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ activo: nuevoActivo }),
+            });
+            loadAlumnos();
+          });
+        });
+      });
+    }
+
+    async function loadAlumnos() {
+      try {
+        const res = await fetch('/admin/api/alumnos');
+        allAlumnos = await res.json();
+        buildAlumnoCursoSelect();
+        renderAlumnos(getFilteredAlumnos());
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    document.getElementById('filter-alumno-name').addEventListener('input',  () => renderAlumnos(getFilteredAlumnos()));
+    document.getElementById('filter-alumno-curso').addEventListener('change', () => renderAlumnos(getFilteredAlumnos()));
+
+    // Agregar alumno manual
+    document.getElementById('add-alumno-btn').addEventListener('click', async () => {
+      const nombre = document.getElementById('new-nombre').value.trim();
+      const curso  = document.getElementById('new-curso').value.trim();
+      if (!nombre || !curso) { alert('Nombre y curso son obligatorios.'); return; }
+      const res  = await fetch('/admin/api/alumnos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre, curso }),
+      });
+      const data = await res.json();
+      if (!data.success) { alert(data.error); return; }
+      document.getElementById('new-nombre').value = '';
+      document.getElementById('new-curso').value  = '';
+      loadAlumnos();
+    });
+
+    // Import CSV
+    (function () {
+      const zone       = document.getElementById('import-zone');
+      const csvFile    = document.getElementById('csv-file');
+      const statusEl   = document.getElementById('import-status');
+
+      function showStatus(msg, ok) {
+        statusEl.style.display = 'block';
+        statusEl.style.color   = ok ? 'var(--green, #22c55e)' : 'var(--red)';
+        statusEl.style.background = ok ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)';
+        statusEl.textContent   = msg;
+      }
+
+      async function uploadCsv(file) {
+        const fd = new FormData();
+        fd.append('csv', file);
+        try {
+          const res  = await fetch('/admin/api/alumnos/import', { method: 'POST', body: fd });
+          const data = await res.json();
+          if (!data.success) { showStatus(`Error: ${data.error}`, false); return; }
+          const warn = data.errores.length ? ` (${data.errores.length} filas ignoradas)` : '';
+          showStatus(`✔ ${data.importados} alumnos importados${warn}`, true);
+          loadAlumnos();
+        } catch {
+          showStatus('Error de conexión al importar.', false);
+        }
+      }
+
+      zone.addEventListener('click', () => csvFile.click());
+      zone.addEventListener('dragover', e => { e.preventDefault(); zone.style.borderColor = 'var(--accent)'; });
+      zone.addEventListener('dragleave', () => { zone.style.borderColor = ''; });
+      zone.addEventListener('drop', e => {
+        e.preventDefault();
+        zone.style.borderColor = '';
+        const file = e.dataTransfer.files[0];
+        if (file) uploadCsv(file);
+      });
+      csvFile.addEventListener('change', () => {
+        if (csvFile.files[0]) uploadCsv(csvFile.files[0]);
+        csvFile.value = '';
+      });
+    })();
+
+    // ── Foto del mes (admin) ──────────────────
+    const MESES_LABEL = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                         'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    function mesLabel(key) {
+      const [y, m] = key.split('-');
+      return `${MESES_LABEL[parseInt(m,10)-1]} ${y}`;
+    }
+    function mesActualLocal() {
+      const n = new Date();
+      return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`;
+    }
+    // Genera los últimos 12 meses para el selector del modal de override
+    function buildUltimosMeses() {
+      const meses = [];
+      const now = new Date();
+      for (let i = 0; i < 12; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        meses.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+      }
+      return meses;
+    }
+
+    let fdmRows = [];  // filas del mes seleccionado
+
+    async function loadFdmMeses() {
+      try {
+        const res   = await fetch('/admin/api/foto-del-mes/meses');
+        const meses = await res.json();
+        const sel   = document.getElementById('fdm-mes-select');
+        const current = sel.value;
+        sel.innerHTML = '<option value="">Selecciona un mes…</option>';
+        // Incluir también el mes actual aunque no tenga fotos aún
+        const todos = [...new Set([mesActualLocal(), ...meses])].sort().reverse();
+        todos.forEach(m => {
+          const opt = document.createElement('option');
+          opt.value = m; opt.textContent = mesLabel(m);
+          sel.appendChild(opt);
+        });
+        // Preseleccionar mes actual o el que estaba antes
+        sel.value = todos.includes(current) ? current : (todos[0] || '');
+        if (sel.value) loadFdmPorMes(sel.value);
+      } catch (err) { console.error(err); }
+    }
+
+    async function loadFdmPorMes(mes) {
+      if (!mes) return;
+      try {
+        const res  = await fetch(`/admin/api/foto-del-mes?mes=${encodeURIComponent(mes)}`);
+        fdmRows = await res.json();
+        buildFdmCursoSelect();
+        renderFdm();
+      } catch (err) { console.error(err); }
+    }
+
+    function buildFdmCursoSelect() {
+      const sel     = document.getElementById('fdm-curso-select');
+      const current = sel.value;
+      const cursos  = [...new Set(fdmRows.map(r => r.alumno_curso))].sort();
+      sel.innerHTML = '<option value="">Todos los cursos</option>';
+      cursos.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c; opt.textContent = c;
+        sel.appendChild(opt);
+      });
+      if (cursos.includes(current)) sel.value = current;
+    }
+
+    function getFilteredFdm() {
+      const curso = document.getElementById('fdm-curso-select').value;
+      return fdmRows.filter(r => !curso || r.alumno_curso === curso);
+    }
+
+    function renderFdm() {
+      const grid    = document.getElementById('fdm-grid');
+      const emptyEl = document.getElementById('fdm-empty');
+      const countEl = document.getElementById('fdm-count');
+      const rows    = getFilteredFdm();
+
+      grid.innerHTML = '';
+      countEl.textContent = `${rows.length} foto${rows.length !== 1 ? 's' : ''}`;
+
+      if (!rows.length) {
+        emptyEl.classList.remove('hidden');
+        return;
+      }
+      emptyEl.classList.add('hidden');
+
+      rows.forEach(r => {
+        const card = document.createElement('div');
+        card.className = 'fdm-card fade-up';
+        card.innerHTML = `
+          <img src="/uploads/${escHtml(r.filename)}" alt="${escHtml(r.alumno_nombre)}" loading="lazy" />
+          <div class="fdm-card-body">
+            <div class="fdm-card-name">${escHtml(r.alumno_nombre)}</div>
+            <div class="fdm-card-curso">${escHtml(r.alumno_curso)}</div>
+            <div class="fdm-card-meta">
+              ${fmtDate(r.elegida_at)}
+              ${r.elegida_por === 'profesor'
+                ? '<span class="fdm-card-by-prof">Profesor</span>'
+                : ''}
+            </div>
+            <div class="fdm-card-actions">
+              <button class="btn-xs" data-action="override" data-job-id="${r.job_id}" data-alumno-id="${r.alumno_id}" data-filename="${escHtml(r.filename)}">Cambiar</button>
+            </div>
+          </div>
+        `;
+        card.querySelector('img').addEventListener('click', () => {
+          openLb(rows.indexOf(r), rows.map(x => ({ filename: x.filename, alumno: x.alumno_nombre, curso: x.alumno_curso, uploaded_at: x.elegida_at })));
+        });
+        card.querySelector('[data-action="override"]').addEventListener('click', () => {
+          openOverrideModal({ job_id: r.job_id, alumno_id: r.alumno_id, filename: r.filename });
+        });
+        grid.appendChild(card);
+      });
+    }
+
+    document.getElementById('fdm-mes-select').addEventListener('change', e => {
+      if (e.target.value) loadFdmPorMes(e.target.value);
+    });
+    document.getElementById('fdm-curso-select').addEventListener('change', renderFdm);
+
+    // ── Modal override ────────────────────────
+    let overrideContext = null;  // { job_id, alumno_id, filename }
+
+    // Abre el modal desde el tab Fotos (sin alumno preseleccionado — el profesor lo elige)
+    async function openOverrideModalFromJob(job) {
+      // Intentar detectar alumno por owner_token si existe, sino dejar sin preselección
+      const alumno_id = null;
+      await openOverrideModal({ job_id: job.id, alumno_id, filename: job.filename });
+    }
+
+    async function openOverrideModal(ctx) {
+      overrideContext = ctx;
+      document.getElementById('override-preview').src = `/uploads/${escHtml(ctx.filename)}`;
+
+      // Poblar select de alumnos
+      const alumnoSel = document.getElementById('override-alumno');
+      alumnoSel.innerHTML = '';
+      (allAlumnos.length ? allAlumnos : await fetch('/admin/api/alumnos').then(r => r.json())).forEach(a => {
+        const opt = document.createElement('option');
+        opt.value = a.id; opt.textContent = `${a.nombre} — ${a.curso}`;
+        if (a.id === ctx.alumno_id) opt.selected = true;
+        alumnoSel.appendChild(opt);
+      });
+
+      // Poblar select de meses (últimos 12)
+      const mesSel = document.getElementById('override-mes');
+      mesSel.innerHTML = '';
+      buildUltimosMeses().forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m; opt.textContent = mesLabel(m);
+        if (m === mesActualLocal()) opt.selected = true;
+        mesSel.appendChild(opt);
+      });
+
+      document.getElementById('override-modal').style.display = 'flex';
+    }
+
+    document.getElementById('override-cancel-btn').addEventListener('click', () => {
+      document.getElementById('override-modal').style.display = 'none';
+    });
+
+    document.getElementById('override-confirm-btn').addEventListener('click', async () => {
+      const alumno_id = Number(document.getElementById('override-alumno').value);
+      const mes       = document.getElementById('override-mes').value;
+      const job_id    = overrideContext.job_id;
+
+      // Verificar si ya hay una foto del mes para ese alumno ese mes
+      const existing = fdmRows.find(r => r.alumno_id === alumno_id && r.mes === mes);
+      if (existing) {
+        const alumnoNombre = document.getElementById('override-alumno').selectedOptions[0].text.split(' — ')[0];
+        if (!confirm(`${alumnoNombre} ya tiene foto del mes de ${mesLabel(mes)}.\n¿Reemplazarla?`)) return;
+      }
+
+      const btn = document.getElementById('override-confirm-btn');
+      btn.disabled = true; btn.textContent = 'Guardando…';
+
+      try {
+        const res  = await fetch('/admin/api/foto-del-mes/override', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ alumno_id, job_id, mes }),
+        });
+        const data = await res.json();
+        if (!data.success) { alert(data.error || 'Error al guardar.'); return; }
+        document.getElementById('override-modal').style.display = 'none';
+        // Recargar si estamos en el mismo mes que se modificó
+        const mesSel = document.getElementById('fdm-mes-select');
+        if (mesSel.value === mes) loadFdmPorMes(mes);
+        else { mesSel.value = mes; loadFdmPorMes(mes); }
+      } catch {
+        alert('Error de conexión.');
+      } finally {
+        btn.disabled = false; btn.textContent = 'Confirmar';
+      }
+    });
 
     lbClose.addEventListener('click', closeLb);
     lbBackdrop.addEventListener('click', closeLb);
