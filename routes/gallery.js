@@ -12,4 +12,14 @@ router.get('/api/jobs', (req, res) => {
   res.json(jobs);
 });
 
+router.post('/like/:id', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({ success: false, error: 'ID inválido.' });
+  }
+  const ip = req.ip || req.socket.remoteAddress;
+  const result = db.toggleLike(id, ip);
+  return res.json({ success: true, ...result });
+});
+
 module.exports = router;

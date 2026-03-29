@@ -170,6 +170,35 @@
       .lightbox-prev { left: 20px; }
       .lightbox-next { right: 20px; }
     }
+
+    /* Like button */
+    .like-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: none;
+      border: 1px solid rgba(255,255,255,0.18);
+      color: rgba(255,255,255,0.6);
+      font-size: 0.76rem;
+      font-weight: 600;
+      padding: 3px 9px;
+      border-radius: 100px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.2s;
+      flex-shrink: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .like-btn:hover  { border-color: rgba(255,100,100,0.5); color: #ff6b6b; }
+    .like-btn.liked  { background: rgba(255,80,80,0.15); border-color: #ff6b6b; color: #ff6b6b; }
+    .like-btn:disabled { opacity: 0.5; cursor: default; }
+    .photo-card-info {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .photo-card-info-text { min-width: 0; }
   </style>
 </head>
 <body class="page">
@@ -208,9 +237,14 @@
           <option value="3 Medio D">3 Medio D</option>
           <option value="3 Medio E">3 Medio E</option>
           <option value="3 Medio F">3 Medio F</option>
+          <option value="Profesora">Profesora</option>
         </select>
         <select id="filter-mes">
           <option value="">Todos los meses</option>
+        </select>
+        <select id="filter-sort">
+          <option value="date">Más recientes</option>
+          <option value="likes">Más populares</option>
         </select>
         <button class="filter-clear" id="filter-clear">✕ Limpiar</button>
       </div>
@@ -244,7 +278,39 @@
     const filterAlumno = document.getElementById('filter-alumno');
     const filterCurso  = document.getElementById('filter-curso');
     const filterMes    = document.getElementById('filter-mes');
+    const filterSort   = document.getElementById('filter-sort');
     const filterClear  = document.getElementById('filter-clear');
+
+    // ── Likes ─────────────────────────────────
+    const LIKED_KEY = 'pf-liked';
+    function getLikedSet() {
+      try { return new Set(JSON.parse(localStorage.getItem(LIKED_KEY) || '[]')); }
+      catch { return new Set(); }
+    }
+    function saveLikedSet(s) {
+      localStorage.setItem(LIKED_KEY, JSON.stringify([...s]));
+    }
+    let likedSet = getLikedSet();
+
+    async function toggleLike(e, jobId) {
+      e.stopPropagation();
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      try {
+        const res  = await fetch(`/like/${jobId}`, { method: 'POST' });
+        const data = await res.json();
+        if (!data.success) return;
+        const job = allJobs.find(j => j.id === jobId);
+        if (job) job.like_count = data.count;
+        if (data.liked) likedSet.add(jobId); else likedSet.delete(jobId);
+        saveLikedSet(likedSet);
+        btn.classList.toggle('liked', data.liked);
+        btn.querySelector('span').textContent = data.count;
+        if (filterSort.value === 'likes') applyFilters();
+      } finally {
+        btn.disabled = false;
+      }
+    }
 
     let allJobs      = [];   // all jobs from server
     let filteredJobs = [];   // currently visible (after filter)
@@ -298,12 +364,16 @@
       const q   = filterAlumno.value.trim().toLowerCase();
       const cur = filterCurso.value;
       const mes = filterMes.value;
-      return allJobs.filter(j => {
+      let jobs  = allJobs.filter(j => {
         const ma = !q   || j.alumno.toLowerCase().includes(q);
         const mc = !cur || j.curso === cur;
         const mm = !mes || monthKey(j.uploaded_at) === mes;
         return ma && mc && mm;
       });
+      if (filterSort.value === 'likes') {
+        jobs = [...jobs].sort((a, b) => (b.like_count || 0) - (a.like_count || 0));
+      }
+      return jobs;
     }
 
     function applyFilters() {
@@ -315,10 +385,12 @@
     filterAlumno.addEventListener('input',  applyFilters);
     filterCurso.addEventListener('change',  applyFilters);
     filterMes.addEventListener('change',    applyFilters);
+    filterSort.addEventListener('change', applyFilters);
     filterClear.addEventListener('click', () => {
       filterAlumno.value = '';
       filterCurso.value  = '';
       filterMes.value    = '';
+      filterSort.value   = 'date';
       applyFilters();
     });
 
@@ -341,10 +413,16 @@
         card.innerHTML = `
           <img src="${src}" alt="${escHtml(job.alumno)} — ${escHtml(job.curso)}" loading="lazy" />
           <div class="photo-card-info">
-            <div class="photo-card-name">${escHtml(job.alumno)}</div>
-            <div class="photo-card-course">${escHtml(job.curso)}</div>
+            <div class="photo-card-info-text">
+              <div class="photo-card-name">${escHtml(job.alumno)}</div>
+              <div class="photo-card-course">${escHtml(job.curso)}</div>
+            </div>
+            <button class="like-btn${likedSet.has(job.id) ? ' liked' : ''}" title="Me gusta">
+              ♥ <span>${job.like_count || 0}</span>
+            </button>
           </div>
         `;
+        card.querySelector('.like-btn').addEventListener('click', e => toggleLike(e, job.id));
         card.addEventListener('click', () => openLightbox(idx));
         grid.appendChild(card);
       });

@@ -6,6 +6,7 @@ Servidor local para el electivo de fotografía y multimedia escolar. Permite a l
 - SQLite con `better-sqlite3`
 - Carga de fotos desde dispositivo móvil (alumnos) y desde el panel admin (profesora)
 - Galería pública en tiempo real con SSE
+- **Likes en fotos**: botón ♥ por IP (toggle), contador en tiempo real, ordenación por popularidad
 - Panel administrador: impresión, eliminación, exportación de reportes y subida de fotos
 - Selección de tamaño de impresión al momento de imprimir (20×15 cm / 10×7 cm)
 - Impresión driverless vía **IPP Everywhere** (sin drivers específicos por modelo)
@@ -210,7 +211,8 @@ npm start
 - `GET /` → portal de upload de alumnos
 - `POST /upload` → recibe foto + campos `alumno`, `curso`
 - `GET /gallery` → galería en tiempo real
-- `GET /api/jobs` → datos JSON de la galería
+- `GET /api/jobs` → datos JSON de la galería (incluye `like_count`)
+- `POST /like/:id` → toggle like/unlike (deduplicado por IP)
 - `GET /events` → SSE para actualizaciones en tiempo real
 
 ### Administración (requiere sesión)
@@ -227,15 +229,16 @@ npm start
 
 - `jobs`: id, filename, original_name, alumno, curso, status, print_count, uploaded_at
 - `print_log`: id, job_id, printed_at
+- `likes`: id, job_id, ip, created_at — con restricción `UNIQUE(job_id, ip)` para deduplicar por IP
 
 > Al eliminar un job se borran primero sus registros en `print_log` y luego el job, más el archivo físico en `UPLOAD_DIR`.
 
 ## Descripción de módulos
 
-- `db/database.js` — better-sqlite3 (síncrono). Funciones: `createJob`, `getJobById`, `getAdminJobs`, `getGalleryJobs`, `incrementPrintCount`, `logPrint`, `deleteJob`
+- `db/database.js` — better-sqlite3 (síncrono). Funciones: `createJob`, `getJobById`, `getAdminJobs`, `getGalleryJobs`, `incrementPrintCount`, `logPrint`, `deleteJob`, `toggleLike`
 - `routes/events.js` — SSE: mantiene conexiones abiertas, expone `broadcast(eventName, data)`
 - `routes/upload.js` — multer + validación + inserción en DB + broadcast `new-photo`
-- `routes/gallery.js` — galería pública y API JSON
+- `routes/gallery.js` — galería pública, API JSON y toggle de likes (`POST /like/:id`)
 - `routes/admin.js` — login, logout, panel, jobs admin, print router, delete job, generación de reporte HTML
 - `routes/print.js` — `lp` + actualizaciones DB + broadcast `print-update`
 - `middleware/auth.js` — `requireAdmin` (verifica sesión)
@@ -252,7 +255,9 @@ npm start
 
 ### `public/gallery.html` — Galería pública
 - Grid responsive de fotos con overlay (nombre y curso del alumno)
-- Filtro por nombre de alumno (búsqueda en tiempo real) y por curso
+- Filtros: búsqueda por alumno, por curso (incluye Profesora), por mes y por popularidad
+- Selector de orden: **Más recientes** / **Más populares** (ordena por `like_count`)
+- **Botón ♥ (like)** en cada card: toggle con animación; contador actualizado en tiempo real; estado persistido en `localStorage` (set de IDs likeados)
 - Contador de fotos con indicador de filtro activo
 - Lightbox al hacer clic en una foto:
   - Navegación con flechas ← → y teclas de teclado
@@ -273,8 +278,8 @@ npm start
 - Contador de trabajos con indicador de filtro activo
 - Toggle de tema oscuro / Sakura (persiste en `localStorage`)
 - Vista adaptativa:
-  - **Desktop**: tabla con miniatura, nombre, curso, fecha, estado, impresiones y acciones
-  - **Mobile**: tarjetas con miniatura y acciones
+  - **Desktop**: tabla con miniatura, nombre, curso, fecha, estado, impresiones, likes y acciones
+  - **Mobile**: tarjetas con miniatura, estado, impresiones, likes y acciones
 - Botón **Imprimir** → abre modal de selección de tamaño (20×15 cm / 10×7 cm) antes de enviar a CUPS
 - Botón **Eliminar** → pide confirmación, borra archivo y registro, actualiza sin recargar
 - Indicador de conexión SSE (punto verde/amarillo)
@@ -320,7 +325,7 @@ Post impresión:
 
 Los cursos están definidos como lista fija en `index.html` y en los filtros de `gallery.html` / `admin.html`:
 
-- 3 Medio A · 3 Medio B · 3 Medio C · 3 Medio D · 3 Medio E · 3 Medio F
+- 3 Medio A · 3 Medio B · 3 Medio C · 3 Medio D · 3 Medio E · 3 Medio F · Profesora
 
 Para agregar o cambiar cursos, editar los `<option>` en los tres archivos HTML.
 
@@ -395,19 +400,26 @@ curl -b cookies.txt -X POST http://localhost:3000/admin/print/1 \
   -d '{"size":"20x15"}'
 ```
 
-6. Eliminar foto:
+6. Toggle like en foto:
+
+```bash
+curl -X POST http://localhost:3000/like/1
+# → { "success": true, "liked": true, "count": 1 }
+```
+
+7. Eliminar foto:
 
 ```bash
 curl -b cookies.txt -X DELETE http://localhost:3000/admin/jobs/1
 ```
 
-7. Exportar reporte:
+8. Exportar reporte:
 
 ```bash
 curl -b cookies.txt "http://localhost:3000/admin/report?from=2025-01-01&to=2025-12-31" -o reporte.html
 ```
 
-8. Ver cola CUPS:
+9. Ver cola CUPS:
 
 ```bash
 lpq -P Brother-DCP-L3551CDW

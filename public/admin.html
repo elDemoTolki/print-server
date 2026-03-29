@@ -206,6 +206,7 @@
           <option value="3 Medio D">3 Medio D</option>
           <option value="3 Medio E">3 Medio E</option>
           <option value="3 Medio F">3 Medio F</option>
+          <option value="Profesora">Profesora</option>
         </select>
         <select id="filter-mes">
           <option value="">Todos los meses</option>
@@ -233,6 +234,7 @@
               <th>Subido</th>
               <th>Estado</th>
               <th>Impresiones</th>
+              <th>Likes</th>
               <th>Acciones</th>
             </tr>
           </thead>
@@ -521,6 +523,7 @@
           <td class="job-date">${fmtDate(job.uploaded_at)}</td>
           <td>${badgeHtml(job.status)}</td>
           <td><span class="print-count"><strong>${job.print_count}</strong>×</span></td>
+          <td><span class="print-count">♥ ${job.like_count || 0}</span></td>
           <td>
             <div class="actions-cell">
               <button class="btn btn-print" data-action="print">🖨 Imprimir</button>
@@ -551,6 +554,7 @@
             <div class="card-footer">
               ${badgeHtml(job.status)}
               <span class="print-count"><strong>${job.print_count}</strong>×</span>
+              <span class="print-count">♥ ${job.like_count || 0}</span>
             </div>
             <div style="display:flex;gap:6px;margin-top:8px">
               <button class="btn btn-print" data-action="print" style="flex:1">🖨 Imprimir</button>

@@ -15,6 +15,15 @@ CREATE TABLE IF NOT EXISTS print_log (
   printed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS likes (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  job_id     INTEGER NOT NULL REFERENCES jobs(id),
+  ip         TEXT NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(job_id, ip)
+);
+
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
 CREATE INDEX IF NOT EXISTS idx_jobs_uploaded_at ON jobs(uploaded_at);
 CREATE INDEX IF NOT EXISTS idx_print_log_job_id ON print_log(job_id);
+CREATE INDEX IF NOT EXISTS idx_likes_job_id ON likes(job_id);

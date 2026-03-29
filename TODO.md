@@ -4,16 +4,16 @@ Funcionalidades pendientes de implementar, ordenadas por complejidad estimada.
 
 ---
 
-## 1. Likes / Estrellas en fotos
+## ~~1. Likes / Estrellas en fotos~~ ✅ Implementado
 
 Permitir que los visitantes de la galería reaccionen a las fotos con un like o una valoración por estrellas.
 
-**Ideas de implementación:**
-- Nueva tabla `likes` en SQLite: `id, job_id, ip, created_at` (o con cookie para evitar doble voto)
-- Endpoint `POST /gallery/like/:id`
-- Mostrar contador de likes en cada card de la galería
-- Ordenar galería por popularidad (opción adicional al orden por fecha)
-- En el panel admin, mostrar ranking de fotos más gustadas
+**Implementado:**
+- Tabla `likes` en SQLite: `id, job_id, ip, created_at` con UNIQUE(job_id, ip) (deduplicación por IP)
+- Endpoint `POST /like/:id` (toggle like/unlike)
+- Contador de likes en cada card de la galería con estado persistido en localStorage
+- Ordenar galería por popularidad (selector "Más recientes / Más populares")
+- En el panel admin, columna Likes en tabla y tarjetas móviles
 
 ---
 

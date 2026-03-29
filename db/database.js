@@ -47,16 +47,40 @@ function getPrintHistory(jobId) {
 }
 
 function getGalleryJobs() {
-  return db.prepare('SELECT id, filename, alumno, curso, uploaded_at FROM jobs ORDER BY uploaded_at DESC').all();
+  return db.prepare(`
+    SELECT j.id, j.filename, j.alumno, j.curso, j.uploaded_at,
+           COUNT(l.id) AS like_count
+    FROM jobs j
+    LEFT JOIN likes l ON l.job_id = j.id
+    GROUP BY j.id
+    ORDER BY j.uploaded_at DESC
+  `).all();
 }
 
 function getAdminJobs() {
-  const jobs = db.prepare('SELECT * FROM jobs ORDER BY uploaded_at DESC').all();
+  const jobs = db.prepare(`
+    SELECT j.*, COUNT(l.id) AS like_count
+    FROM jobs j
+    LEFT JOIN likes l ON l.job_id = j.id
+    GROUP BY j.id
+    ORDER BY j.uploaded_at DESC
+  `).all();
   const historyStmt = db.prepare('SELECT printed_at FROM print_log WHERE job_id = ? ORDER BY printed_at DESC');
   return jobs.map(job => ({
     ...job,
     print_history: historyStmt.all(job.id).map(r => r.printed_at),
   }));
+}
+
+function toggleLike(jobId, ip) {
+  const existing = db.prepare('SELECT id FROM likes WHERE job_id = ? AND ip = ?').get(jobId, ip);
+  if (existing) {
+    db.prepare('DELETE FROM likes WHERE job_id = ? AND ip = ?').run(jobId, ip);
+  } else {
+    db.prepare('INSERT INTO likes (job_id, ip) VALUES (?, ?)').run(jobId, ip);
+  }
+  const { count } = db.prepare('SELECT COUNT(*) AS count FROM likes WHERE job_id = ?').get(jobId);
+  return { liked: !existing, count };
 }
 
 function getJobsByDateRange(from, to) {
@@ -85,4 +109,5 @@ module.exports = {
   getAdminJobs,
   deleteJob,
   getJobsByDateRange,
+  toggleLike,
 };
