@@ -41,7 +41,7 @@ router.get('/api/mis-fotos', (req, res) => {
     return res.json({ success: true, alumno: null, jobs: [], fotoDelMes: {} });
   }
 
-  const jobs = db.getJobsByToken(token);
+  const jobs = db.getJobsByToken(token, tokenInfo.nombre);
 
   // Mapa mes → foto_del_mes elegida para este alumno
   const fotoDelMesRows = db.getAllFotoDelMesByAlumno(tokenInfo.alumno_id);

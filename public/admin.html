@@ -193,12 +193,21 @@
       padding: 1px 6px;
       border-radius: 4px;
       font-size: 0.7rem;
-      max-width: 90px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      word-break: break-all;
+      cursor: pointer;
     }
+    .token-item .token-code:hover { background: var(--border); }
+    .token-item .token-ip { font-size: 0.65rem; color: var(--muted); }
     .token-item.inactive { opacity: 0.4; }
+    .token-warn { font-size: 0.68rem; color: #f97316; background: rgba(249,115,22,0.1); border: 1px solid rgba(249,115,22,0.3); border-radius: 4px; padding: 1px 6px; }
+    /* Auditoría */
+    .audit-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .audit-table th { text-align: left; padding: 6px 8px; font-size: 0.7rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); border-bottom: 1px solid var(--border); }
+    .audit-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .audit-table tr.mismatch td { background: rgba(249,115,22,0.06); }
+    .audit-table .audit-thumb { width: 36px; height: 36px; object-fit: cover; border-radius: 4px; }
+    .audit-token { font-family: monospace; font-size: 0.68rem; color: var(--muted-2); word-break: break-all; }
+    .audit-flag { font-size: 0.7rem; font-weight: 700; color: #f97316; }
     .btn-xs {
       background: transparent;
       border: 1px solid var(--border);
@@ -215,6 +224,9 @@
     .btn-xs:hover { color: var(--text); border-color: var(--text); }
     .btn-xs.danger { border-color: rgba(239,68,68,0.3); color: var(--red); }
     .btn-xs.danger:hover { background: rgba(239,68,68,0.1); border-color: var(--red); }
+    .btn-xs.btn-fdm-active { border-color: #ca8a04; color: #facc15; background: rgba(250,204,21,0.08); }
+    .btn-xs.btn-fdm-active:hover { background: rgba(250,204,21,0.18); }
+    .fdm-badge { font-size: 0.7rem; font-weight: 700; color: #facc15; background: rgba(250,204,21,0.12); border: 1px solid rgba(250,204,21,0.3); border-radius: 4px; padding: 1px 6px; white-space: nowrap; }
     .import-zone {
       border: 2px dashed var(--border);
       border-radius: var(--radius);
@@ -368,6 +380,7 @@
         <button class="admin-tab active" data-tab="fotos">Fotos</button>
         <button class="admin-tab" data-tab="alumnos">Alumnos</button>
         <button class="admin-tab" data-tab="foto-del-mes">Foto del mes</button>
+        <button class="admin-tab" data-tab="auditoria">Auditoría</button>
       </div>
 
       <!-- ═══ PANEL FOTOS ══════════════════════════════════════════════════ -->
@@ -528,6 +541,37 @@
 
       </div><!-- /pane-foto-del-mes -->
 
+      <!-- ═══ PANEL AUDITORÍA ══════════════════════════════════════════════ -->
+      <div class="admin-pane" id="pane-auditoria">
+        <div style="margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <input id="audit-filter" type="search" placeholder="Filtrar por alumno o token…" style="flex:1;min-width:180px;padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:0.85rem" />
+          <label style="font-size:0.82rem;display:flex;align-items:center;gap:6px;color:var(--muted-2);cursor:pointer">
+            <input type="checkbox" id="audit-only-mismatch" /> Solo discrepancias
+          </label>
+          <span id="audit-count" style="font-size:0.8rem;color:var(--muted)"></span>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="audit-table">
+            <thead>
+              <tr>
+                <th></th>
+                <th>#</th>
+                <th>Alumno en la foto</th>
+                <th>Fecha</th>
+                <th>Token (dispositivo)</th>
+                <th>Alumno vinculado al token</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="audit-body"></tbody>
+          </table>
+        </div>
+        <div id="audit-empty" class="empty-state hidden">
+          <div class="icon">🔍</div>
+          <p>Sin datos de auditoría.</p>
+        </div>
+      </div><!-- /pane-auditoria -->
+
     </main>
   </div>
 
@@ -555,9 +599,10 @@
   <div class="size-overlay" id="size-modal" style="display:none" role="dialog" aria-modal="true">
     <div class="size-box">
       <p class="size-title">🖨 Tamaño de impresión</p>
-      <div class="size-btns">
-        <button class="btn" id="size-20x15">20×15 cm</button>
-        <button class="btn btn-secondary" id="size-10x7">10×7 cm</button>
+      <div class="size-btns" style="flex-direction:column;gap:8px">
+        <button class="btn" id="size-full">Tamaño completo (hoja)</button>
+        <button class="btn" id="size-20x15">15×20 cm</button>
+        <button class="btn btn-secondary" id="size-10x7">7×10 cm</button>
       </div>
       <button class="btn-delete" id="size-cancel" style="width:100%;margin-top:10px;height:34px">Cancelar</button>
     </div>
@@ -667,23 +712,27 @@
     // ── Print size modal ─────────────────────
     function askPrintSize() {
       return new Promise((resolve) => {
-        const modal  = document.getElementById('size-modal');
-        const btn20  = document.getElementById('size-20x15');
-        const btn10  = document.getElementById('size-10x7');
-        const cancel = document.getElementById('size-cancel');
+        const modal   = document.getElementById('size-modal');
+        const btnFull = document.getElementById('size-full');
+        const btn20   = document.getElementById('size-20x15');
+        const btn10   = document.getElementById('size-10x7');
+        const cancel  = document.getElementById('size-cancel');
         modal.style.display = 'flex';
 
         function pick(size) {
           modal.style.display = 'none';
+          btnFull.removeEventListener('click', onFull);
           btn20.removeEventListener('click', on20);
           btn10.removeEventListener('click', on10);
           cancel.removeEventListener('click', onCancel);
           resolve(size);
         }
+        const onFull   = () => pick('full');
         const on20     = () => pick('20x15');
         const on10     = () => pick('10x7');
         const onCancel = () => pick(null);
 
+        btnFull.addEventListener('click', onFull);
         btn20.addEventListener('click', on20);
         btn10.addEventListener('click', on10);
         cancel.addEventListener('click', onCancel);
@@ -820,7 +869,7 @@
           <td>
             <div class="actions-cell">
               <button class="btn btn-print" data-action="print">🖨 Imprimir</button>
-              <button class="btn-xs" data-action="fdm-override" title="Marcar como foto del mes">⭐ Foto mes</button>
+              <button class="btn-xs${job.fdm_mes ? ' btn-fdm-active' : ''}" data-action="fdm-override" title="${job.fdm_mes ? `Foto del mes ${job.fdm_mes} (${job.fdm_elegida_por})` : 'Marcar como foto del mes'}">⭐${job.fdm_mes ? ' ' + job.fdm_mes : ' Foto mes'}</button>
               <button class="btn-delete" data-action="delete">🗑 Eliminar</button>
             </div>
           </td>
@@ -852,10 +901,11 @@
               ${badgeHtml(job.status)}
               <span class="print-count"><strong>${job.print_count}</strong>×</span>
               <span class="print-count">♥ ${job.like_count || 0}</span>
+              ${job.fdm_mes ? `<span class="fdm-badge" title="Foto del mes ${job.fdm_mes} (${job.fdm_elegida_por})">⭐ ${job.fdm_mes}</span>` : ''}
             </div>
             <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
               <button class="btn btn-print" data-action="print" style="flex:1">🖨 Imprimir</button>
-              <button class="btn-xs" data-action="fdm-override" style="height:36px;padding:0 10px">⭐</button>
+              <button class="btn-xs${job.fdm_mes ? ' btn-fdm-active' : ''}" data-action="fdm-override" style="height:36px;padding:0 10px" title="${job.fdm_mes ? `Foto del mes ${job.fdm_mes}` : 'Marcar como foto del mes'}">⭐</button>
               <button class="btn-delete" data-action="delete">🗑</button>
             </div>
           </div>
@@ -988,11 +1038,13 @@
         document.getElementById(`pane-${tab.dataset.tab}`).classList.add('active');
         if (tab.dataset.tab === 'alumnos')      loadAlumnos();
         if (tab.dataset.tab === 'foto-del-mes') loadFdmMeses();
+        if (tab.dataset.tab === 'auditoria')    loadAudit();
       });
     });
 
     // ── Alumnos ───────────────────────────────
     let allAlumnos = [];
+    let auditTokenWarnings = new Set(); // tokens que tienen fotos de otro alumno
 
     function buildAlumnoCursoSelect() {
       const sel = document.getElementById('filter-alumno-curso');
@@ -1038,13 +1090,22 @@
 
       list.forEach(a => {
         const tokensHtml = a.tokens.length
-          ? a.tokens.map(t => `
+          ? a.tokens.map(t => {
+              const warn = auditTokenWarnings.has(t.token)
+                ? `<span class="token-warn" title="Este token tiene fotos de otro alumno">⚠ otro alumno</span>`
+                : '';
+              return `
               <div class="token-item ${t.activo ? '' : 'inactive'}">
-                <span class="token-code" title="${escHtml(t.token)}">${escHtml(t.token.slice(0, 8))}…</span>
+                <div>
+                  <span class="token-code" data-copy="${escHtml(t.token)}" title="Clic para copiar">${escHtml(t.token)}</span>
+                  ${t.ip_primer_uso ? `<div class="token-ip">${escHtml(t.ip_primer_uso)}</div>` : ''}
+                </div>
+                ${warn}
                 ${t.activo
                   ? `<button class="btn-xs danger" data-action="desactivar-token" data-token="${escHtml(t.token)}">Desactivar</button>`
                   : '<span style="font-size:0.7rem">inactivo</span>'}
-              </div>`).join('')
+              </div>`;
+            }).join('')
           : '<span style="font-size:0.78rem;color:var(--muted)">Sin dispositivo</span>';
 
         const activoBtn = a.activo
@@ -1083,6 +1144,19 @@
         cards.appendChild(card);
       });
 
+      // Copiar token al portapapeles
+      [tbody, cards].forEach(container => {
+        container.querySelectorAll('.token-code[data-copy]').forEach(el => {
+          el.addEventListener('click', () => {
+            navigator.clipboard.writeText(el.dataset.copy).then(() => {
+              const prev = el.textContent;
+              el.textContent = '¡Copiado!';
+              setTimeout(() => { el.textContent = prev; }, 1200);
+            });
+          });
+        });
+      });
+
       // Delegación de eventos
       [tbody, cards].forEach(container => {
         container.querySelectorAll('[data-action="desactivar-token"]').forEach(btn => {
@@ -1108,8 +1182,21 @@
 
     async function loadAlumnos() {
       try {
-        const res = await fetch('/admin/api/alumnos');
-        allAlumnos = await res.json();
+        const [resA, resAudit] = await Promise.all([
+          fetch('/admin/api/alumnos'),
+          fetch('/admin/api/audit'),
+        ]);
+        allAlumnos = await resA.json();
+        const auditRows = await resAudit.json();
+
+        // Construir set de tokens con discrepancia: el alumno en el job ≠ alumno vinculado al token
+        auditTokenWarnings = new Set();
+        auditRows.forEach(r => {
+          if (r.owner_token && r.token_alumno_nombre && r.job_alumno !== r.token_alumno_nombre) {
+            auditTokenWarnings.add(r.owner_token);
+          }
+        });
+
         buildAlumnoCursoSelect();
         renderAlumnos(getFilteredAlumnos());
       } catch (err) {
@@ -1303,6 +1390,62 @@
       if (e.target.value) loadFdmPorMes(e.target.value);
     });
     document.getElementById('fdm-curso-select').addEventListener('change', renderFdm);
+
+    // ── Auditoría ─────────────────────────────
+    let allAuditRows = [];
+
+    async function loadAudit() {
+      try {
+        const res = await fetch('/admin/api/audit');
+        allAuditRows = await res.json();
+        renderAudit();
+      } catch (err) { console.error(err); }
+    }
+
+    function renderAudit() {
+      const filterVal  = (document.getElementById('audit-filter').value || '').toLowerCase();
+      const onlyMismatch = document.getElementById('audit-only-mismatch').checked;
+      const tbody = document.getElementById('audit-body');
+      const empty = document.getElementById('audit-empty');
+
+      let rows = allAuditRows.filter(r => {
+        const mismatch = r.owner_token && r.token_alumno_nombre && r.job_alumno !== r.token_alumno_nombre;
+        if (onlyMismatch && !mismatch) return false;
+        if (filterVal) {
+          const hay = `${r.job_alumno} ${r.owner_token || ''} ${r.token_alumno_nombre || ''}`.toLowerCase();
+          if (!hay.includes(filterVal)) return false;
+        }
+        return true;
+      });
+
+      document.getElementById('audit-count').textContent =
+        `${rows.length} de ${allAuditRows.length} fotos`;
+
+      tbody.innerHTML = '';
+      if (!rows.length) { empty.classList.remove('hidden'); return; }
+      empty.classList.add('hidden');
+
+      rows.forEach(r => {
+        const mismatch = r.owner_token && r.token_alumno_nombre && r.job_alumno !== r.token_alumno_nombre;
+        const tr = document.createElement('tr');
+        if (mismatch) tr.className = 'mismatch';
+        tr.innerHTML = `
+          <td><img class="audit-thumb" src="/uploads/${escHtml(r.filename)}" alt="" loading="lazy" /></td>
+          <td class="text-muted">${r.id}</td>
+          <td><strong>${escHtml(r.job_alumno)}</strong><br><span class="text-muted" style="font-size:0.75rem">${escHtml(r.job_curso || '')}</span></td>
+          <td class="job-date" style="font-size:0.78rem">${fmtDate(r.uploaded_at)}</td>
+          <td><span class="audit-token">${r.owner_token ? escHtml(r.owner_token) : '<em style="color:var(--muted)">legacy</em>'}</span></td>
+          <td>${r.token_alumno_nombre
+            ? `<strong>${escHtml(r.token_alumno_nombre)}</strong><br><span class="text-muted" style="font-size:0.75rem">${escHtml(r.token_alumno_curso || '')}</span>`
+            : '<em style="color:var(--muted);font-size:0.78rem">sin vincular</em>'}</td>
+          <td>${mismatch ? '<span class="audit-flag">⚠ discrepancia</span>' : ''}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    document.getElementById('audit-filter').addEventListener('input', renderAudit);
+    document.getElementById('audit-only-mismatch').addEventListener('change', renderAudit);
 
     // ── Modal override ────────────────────────
     let overrideContext = null;  // { job_id, alumno_id, filename }

@@ -74,9 +74,11 @@ function getGalleryJobs() {
 
 function getAdminJobs() {
   const jobs = db.prepare(`
-    SELECT j.*, COUNT(l.id) AS like_count
+    SELECT j.*, COUNT(DISTINCT l.id) AS like_count,
+           f.mes AS fdm_mes, f.elegida_por AS fdm_elegida_por
     FROM jobs j
     LEFT JOIN likes l ON l.job_id = j.id
+    LEFT JOIN foto_del_mes f ON f.job_id = j.id
     GROUP BY j.id
     ORDER BY j.uploaded_at DESC
   `).all();
@@ -214,16 +216,20 @@ function getMesesConFotoDelMes() {
 
 // ── Jobs por token ────────────────────────────────────────────────────────────
 
-function getJobsByToken(token) {
+function getJobsByToken(token, nombre) {
+  // Incluye fotos subidas con el token actual Y fotos legacy (owner_token IS NULL)
+  // que coincidan por nombre de alumno — para retrocompatibilidad con uploads
+  // anteriores al sistema de perfiles.
   return db.prepare(`
     SELECT j.id, j.filename, j.alumno, j.curso, j.uploaded_at, j.mes_local,
            COUNT(l.id) AS like_count
     FROM jobs j
     LEFT JOIN likes l ON l.job_id = j.id
     WHERE j.owner_token = ?
+       OR (j.owner_token IS NULL AND j.alumno = ?)
     GROUP BY j.id
     ORDER BY j.uploaded_at DESC
-  `).all(token);
+  `).all(token, nombre || '');
 }
 
 function getJobsByDateRange(fromUtc, toUtc) {
@@ -235,6 +241,21 @@ function getJobsByDateRange(fromUtc, toUtc) {
     'WHERE uploaded_at >= ? AND uploaded_at <= ? ' +
     'ORDER BY uploaded_at ASC'
   ).all(fromUtc, toUtc);
+}
+
+// Auditoría: cada foto con el alumno registrado en el job Y el alumno vinculado al token.
+function getAuditJobs() {
+  return db.prepare(`
+    SELECT j.id, j.filename, j.alumno AS job_alumno, j.curso AS job_curso,
+           j.uploaded_at, j.owner_token,
+           dt.alumno_id AS token_alumno_id,
+           a.nombre     AS token_alumno_nombre,
+           a.curso      AS token_alumno_curso
+    FROM jobs j
+    LEFT JOIN device_tokens dt ON dt.token = j.owner_token
+    LEFT JOIN alumnos a ON a.id = dt.alumno_id
+    ORDER BY j.uploaded_at DESC
+  `).all();
 }
 
 function deleteJob(id) {
@@ -271,6 +292,7 @@ module.exports = {
   getTokensByAlumno,
   reasignarTokens,
   desactivarToken,
+  getAuditJobs,
   // foto del mes
   getFotoDelMesByAlumnoMes,
   getAllFotoDelMesByAlumno,

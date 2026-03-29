@@ -250,6 +250,10 @@ router.get('/api/jobs', requireAdmin, (req, res) => {
   res.json(jobs);
 });
 
+router.get('/api/audit', requireAdmin, (_req, res) => {
+  res.json(db.getAuditJobs());
+});
+
 router.delete('/jobs/:id', requireAdmin, (req, res) => {
   const id = Number(req.params.id);
   const job = db.getJobById(id);
