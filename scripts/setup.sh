@@ -439,6 +439,93 @@ DMEOF
 }
 
 # =============================================================================
+# CONFIGURAR IMPRESORA
+# =============================================================================
+
+configure_printer() {
+    hr; info "Configurando impresora en CUPS..."
+    echo
+
+    # ── Impresoras ya registradas ─────────────────────────────────────────────
+    info "Impresoras registradas actualmente:"
+    lpstat -p 2>/dev/null || warn "  Ninguna impresora registrada todavía."
+    echo
+
+    # ── Detectar URIs disponibles por USB ────────────────────────────────────
+    info "Detectando impresoras conectadas por USB..."
+    local raw_uris
+    raw_uris=$(lpinfo -v 2>/dev/null | grep -i "ipp\|usb" | grep -iv "socket\|lpd\|dnssd") || true
+
+    if [[ -z "$raw_uris" ]]; then
+        err "No se detectó ninguna impresora USB. Verifica que esté conectada y encendida."
+    fi
+
+    # Mostrar lista numerada
+    local uris=()
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && uris+=("$(echo "$line" | awk '{print $2}')")
+    done <<< "$raw_uris"
+
+    echo "  URIs disponibles:"
+    for i in "${!uris[@]}"; do
+        printf "  [%d]  %s\n" "$((i+1))" "${uris[$i]}"
+    done
+    echo
+
+    # ── Seleccionar URI ──────────────────────────────────────────────────────
+    local CUPS_URI=""
+    if (( ${#uris[@]} == 1 )); then
+        CUPS_URI="${uris[0]}"
+        info "URI detectado automáticamente: ${BOLD}$CUPS_URI${NC}"
+        local confirm
+        read -rp "  ¿Usar este URI? [S/n]: " confirm
+        [[ "$confirm" =~ ^[Nn]$ ]] && read -rp "  URI manual: " CUPS_URI
+    else
+        local pick
+        read -rp "  Elige el número de la impresora: " pick
+        CUPS_URI="${uris[$((pick-1))]:-}"
+        [[ -z "$CUPS_URI" ]] && err "Selección inválida."
+    fi
+
+    # ── Nombre CUPS ──────────────────────────────────────────────────────────
+    # Sugerir un nombre limpio basado en la URI
+    local suggested
+    suggested=$(echo "$CUPS_URI" | grep -oP '(?<=://)[^/_%?]+' | tr ' ' '_' | head -1) || suggested="Impresora"
+    local CUPS_NAME="$suggested"
+    askd "Nombre para la impresora en CUPS (sin espacios)" CUPS_NAME
+    CUPS_NAME="${CUPS_NAME// /_}"   # reemplazar espacios por _ por si acaso
+
+    # ── Registrar en CUPS ────────────────────────────────────────────────────
+    lpadmin -p "$CUPS_NAME" -v "$CUPS_URI" -m everywhere -E -o printer-is-shared=false
+    sleep 1
+    lpstat -p "$CUPS_NAME" &>/dev/null \
+        && ok "Impresora '${BOLD}${CUPS_NAME}${NC}' registrada y activa en CUPS" \
+        || warn "La impresora fue registrada pero no responde aún — puede demorar unos segundos."
+
+    # ── Actualizar PRINTER_NAME en .env ──────────────────────────────────────
+    for envfile in "$INSTALL_DIR/.env" "$PROJECT_DIR/.env"; do
+        if [[ -f "$envfile" ]]; then
+            sed -i "s/^PRINTER_NAME=.*/PRINTER_NAME=${CUPS_NAME}/" "$envfile"
+            ok "PRINTER_NAME=$CUPS_NAME → $envfile"
+        fi
+    done
+
+    # ── Reiniciar servidor ────────────────────────────────────────────────────
+    if systemctl is-active --quiet print-server; then
+        systemctl restart print-server
+        sleep 2
+        systemctl is-active --quiet print-server \
+            && ok "Servidor reiniciado con la nueva impresora" \
+            || warn "Revisar: sudo journalctl -u print-server -n 20"
+    fi
+
+    hr
+    echo -e "  Impresora configurada: ${BOLD}${CUPS_NAME}${NC}"
+    echo -e "  Prueba:  ${BOLD}echo 'Test' | lp -d ${CUPS_NAME}${NC}"
+    hr
+}
+
+# =============================================================================
 # RESUMEN FINAL + VERIFICACIÓN DE ARRANQUE AUTOMÁTICO
 # =============================================================================
 
@@ -493,6 +580,7 @@ main() {
     echo "  [4]  Solo dependencias        (Node.js, CUPS, build tools)"
     echo "  [5]  Actualizar servidor      (recopia archivos y reinicia)"
     echo "  [6]  Reconfigurar .env        (nueva contraseña / impresora)"
+    echo "  [7]  Configurar impresora    (detectar USB, registrar en CUPS y actualizar .env)"
     echo "  [q]  Salir"
     hr
     echo
@@ -538,6 +626,9 @@ main() {
             chown "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR/.env"
             systemctl restart print-server
             ok ".env actualizado y servidor reiniciado."
+            ;;
+        7)
+            configure_printer
             ;;
         q|Q)
             echo "Saliendo."
