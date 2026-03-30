@@ -11,10 +11,12 @@ Servidor local para el electivo de fotografía y multimedia escolar. Permite a l
 - **Mis fotos**: panel personal del alumno, filtro por mes, selección de foto del mes
 - **Foto del mes**: página pública con la foto elegida por cada alumno por mes; override del profesor
 - Panel administrador: impresión, eliminación, exportación de reportes, gestión de alumnos y foto del mes
-- Selección de tamaño de impresión al momento de imprimir (20×15 cm / 10×7 cm)
-- Impresión driverless vía **IPP Everywhere** (sin drivers específicos por modelo)
+- **Tamaños de impresión**: tamaño completo / 20×15 cm / 7×10 cm con redimensionado automático vía ImageMagick
+- **Backup ZIP**: descarga todas las fotos organizadas por `curso/alumno/` desde el panel admin
+- **Auditoría de tokens**: tabla que cruza foto → alumno del job → alumno vinculado al token, con flags de discrepancia y detección de múltiples dispositivos
+- Impresión vía CUPS con `lp` (custom page-width/page-height en puntos PostScript)
 - WiFi AP local con **WPA2**, **portal cautivo** y servicio systemd para arranque automático
-- Diseño responsive (mobile-first), dark theme / tema Sakura
+- Diseño responsive (mobile-first), dark theme / **tema Sakura por defecto**
 
 ## Estructura de carpetas
 
@@ -39,7 +41,7 @@ print-server/
 │   │   └── app.css
 │   ├── js/
 │   │   └── theme.js
-│   ├── uploads/
+│   ├── uploads/          ← excluido del rsync en actualizaciones
 │   ├── index.html
 │   ├── gallery.html
 │   ├── mis-fotos.html
@@ -94,6 +96,20 @@ Descarga el instalador LTS desde https://nodejs.org e instálalo. Verifica con:
 ```cmd
 node --version
 npm --version
+```
+
+---
+
+### ImageMagick (necesario para redimensionar fotos al imprimir)
+
+```bash
+sudo apt install -y imagemagick
+```
+
+Verifica que `convert` esté disponible:
+
+```bash
+convert --version
 ```
 
 ---
@@ -185,6 +201,8 @@ El script se encarga de:
 
 Todo queda habilitado al inicio: `print-server`, `hostapd`, `dnsmasq`, `cups` y `netfilter-persistent` se inician automáticamente sin intervención manual.
 
+> **Importante**: la opción `[5]` (actualizar) preserva automáticamente las fotos subidas (`public/uploads/`) y la base de datos (`db/*.db`) — no se borran al hacer `git pull` + actualizar.
+
 ---
 
 ## Instalación manual
@@ -231,12 +249,14 @@ npm start
 - `GET /admin/login` → formulario de login
 - `POST /admin/login` → autenticación
 - `POST /admin/logout` → cerrar sesión
-- `GET /admin` → panel (tabs: Fotos / Alumnos / Foto del mes)
-- `GET /admin/api/jobs` → historial completo con `print_history`
-- `POST /admin/print/:id` → enviar foto a imprimir
+- `GET /admin` → panel (tabs: Fotos / Alumnos / Foto del mes / Auditoría)
+- `GET /admin/api/jobs` → historial completo con `print_history`, `fdm_mes` y `fdm_elegida_por`
+- `GET /admin/api/audit` → tabla de auditoría: foto → alumno del job → alumno del token
+- `GET /admin/api/backup` → descarga ZIP de todas las fotos organizadas por `curso/alumno/`
+- `POST /admin/print/:id` → enviar foto a imprimir (acepta `size`: `full` | `20x15` | `10x7`)
 - `DELETE /admin/jobs/:id` → eliminar foto y registro (borra archivo del disco)
 - `GET /admin/report` → exportar reporte HTML con rango de fechas
-- `GET /admin/api/alumnos` → lista de alumnos con sus tokens
+- `GET /admin/api/alumnos` → lista de alumnos con sus tokens (incluye `ip_primer_uso`)
 - `POST /admin/api/alumnos` → crear alumno individual
 - `POST /admin/api/alumnos/import` → importar CSV (`nombre,curso`)
 - `PATCH /admin/api/alumnos/:id/activo` → activar/desactivar alumno
@@ -261,14 +281,14 @@ npm start
 
 ## Descripción de módulos
 
-- `db/database.js` — better-sqlite3 (síncrono). Funciones para jobs, alumnos, device_tokens y foto_del_mes. Incluye migración `ALTER TABLE` idempotente para DBs existentes.
+- `db/database.js` — better-sqlite3 (síncrono). Funciones para jobs, alumnos, device_tokens y foto_del_mes. Incluye migración `ALTER TABLE` idempotente para DBs existentes. `getAdminJobs()` retorna `fdm_mes`/`fdm_elegida_por` vía JOIN. `getAuditJobs()` cruza jobs con device_tokens y alumnos para auditoría.
 - `routes/events.js` — SSE: mantiene conexiones abiertas, expone `broadcast(eventName, data)`
 - `routes/upload.js` — multer + validación + inserción en DB + vinculación de device_token + broadcast `new-photo`
 - `routes/gallery.js` — galería pública, mis-fotos, foto-del-mes, API JSON y toggle de likes
-- `routes/admin.js` — login, panel, jobs, print router, gestión de alumnos, tokens y foto del mes
-- `routes/print.js` — `lp` + actualizaciones DB + broadcast `print-update`
+- `routes/admin.js` — login, panel, jobs, print router, gestión de alumnos, tokens, foto del mes, auditoría y backup ZIP
+- `routes/print.js` — ImageMagick + `lp` + actualizaciones DB + broadcast `print-update`
 - `middleware/auth.js` — `requireAdmin` (verifica sesión)
-- `public/js/theme.js` — toggle tema oscuro / Sakura (guarda preferencia en `localStorage`)
+- `public/js/theme.js` — toggle tema oscuro / Sakura (guarda preferencia en `localStorage`; **Sakura es el tema por defecto**)
 
 ## Frontend
 
@@ -311,10 +331,12 @@ npm start
 - Formulario de contraseña con feedback de error inline
 
 ### `public/admin.html` — Panel de administración
-- **Tab Fotos**: tabla/cards de jobs con filtros, impresión, eliminación, botón ⭐ para marcar foto del mes
-- **Tab Alumnos**: importación CSV (`nombre,curso`), alta manual, lista con tokens por alumno, activar/desactivar alumnos y dispositivos
-- **Tab Foto del mes**: grid por mes y curso con las fotos elegidas; botón "Cambiar" abre modal de override
+- **Tab Fotos**: tabla/cards de jobs con filtros, impresión, eliminación, botón ⭐ que muestra el mes si la foto está marcada como foto del mes
+- **Tab Alumnos**: importación CSV (`nombre,curso`), alta manual, lista con tokens completos por alumno (clic para copiar), IP del primer uso, badge ⚠ si el token tiene fotos de otro alumno; activar/desactivar alumnos y dispositivos
+- **Tab Foto del mes**: grid por mes y curso con las fotos elegidas; lightbox usando las fotos del mes (no del tab Fotos); botón "Cambiar" abre modal de override
+- **Tab Auditoría**: tabla foto → alumno del job → token → alumno vinculado al token; flags `⚠ nombre distinto` (naranja) y `⚠ 2+ dispositivos` (violeta); filtro por texto y checkbox "Solo discrepancias"
 - **Modal override**: preview de la foto, selector de alumno y de mes (últimos 12); pide confirmación si ya hay selección; registra `elegida_por = 'profesor'`
+- **Backup ZIP**: botón "📦 Backup ZIP" descarga todas las fotos organizadas por `curso/alumno/archivo`
 - Exportación de reportes HTML por rango de fechas
 - Indicador de conexión SSE (punto verde/amarillo)
 
@@ -338,6 +360,17 @@ Los alumnos se identifican sin login mediante un `device_token` (UUID) generado 
 - Si el profesor hizo el override, el alumno ve "Foto del mes seleccionada por tu profesor" y no puede cambiarla
 - La página pública `/foto-del-mes` muestra las fotos elegidas filtradas por mes y curso
 
+## Auditoría de tokens
+
+El tab **Auditoría** del panel admin permite detectar irregularidades:
+
+| Flag | Descripción |
+|------|-------------|
+| `⚠ nombre distinto` | El alumno registrado en el job difiere del alumno vinculado al token que subió la foto |
+| `⚠ 2+ dispositivos` | El alumno vinculado al token tiene fotos subidas desde más de un token distinto |
+
+La fila se resalta en naranja tenue cuando hay algún flag. El filtro "Solo discrepancias" muestra únicamente las filas problemáticas.
+
 ## SSE (Server-Sent Events)
 
 `GET /events` mantiene una conexión abierta por cliente.
@@ -357,22 +390,37 @@ Los alumnos se identifican sin login mediante un `device_token` (UUID) generado 
 { "size": "20x15" }
 ```
 
-`routes/print.js` mapea el tamaño a la media CUPS y ejecuta:
+`routes/print.js` redimensiona la foto con ImageMagick y ejecuta `lp`:
 
-```bash
-lp -d "<PRINTER_NAME>" -o media=<MEDIA> -o fit-to-page "<filePath>"
-```
+| `size` | Foto (px @ 300dpi) | Canvas enviado a la impresora | Papel |
+|--------|-------------------|-------------------------------|-------|
+| `full` | sin cambio | sin cambio | papel cargado (escala automática) |
+| `20x15` | 1772×2362 | 1772×2362 | 15×20 cm (425×567 pt) |
+| `10x7` | 827×1181 centrada | 1181×2126 | 10×18 cm (284×510 pt) |
 
-| `size` | Media CUPS | Dimensiones |
-|--------|-----------|-------------|
-| `20x15` | `Custom.200x150mm` | 20×15 cm |
-| `10x7`  | `Custom.100x70mm`  | 10×7 cm |
-| _(sin body)_ | `4x6` | 10×15 cm (fallback) |
+Para `10x7`: la foto de 7×10 cm queda centrada sobre un canvas blanco del tamaño exacto del papel (10×18 cm), evitando que la impresora escale o recorte.
 
 Post impresión:
 - `incrementPrintCount(id)` → `status = 'printed'`
 - `logPrint(id)`
 - `broadcast('print-update', { id, print_count, status })`
+
+## Backup de fotos
+
+`GET /admin/api/backup` genera y descarga un ZIP en streaming con todas las fotos organizadas:
+
+```
+backup-2026-03-29.zip
+  Sin Curso/
+    David Ubilla Torres/
+      foto.jpg
+      foto_2.jpg      ← numerado si hay nombre duplicado
+  1ro A/
+    Ana García/
+      captura.jpg
+```
+
+El nombre de cada archivo es el `original_name` almacenado al subir la foto. El botón "📦 Backup ZIP" en el panel admin dispara la descarga directamente desde el navegador.
 
 ## Manejo de errores
 
@@ -405,6 +453,21 @@ Ver logs del servidor:
 ```bash
 sudo journalctl -u print-server -f
 ```
+
+## Actualizar el servidor (git pull)
+
+```bash
+# En la máquina de desarrollo
+git pull
+# Luego en el servidor Linux
+sudo bash scripts/setup.sh  # → [5] Actualizar servidor
+```
+
+La opción `[5]` usa `rsync --delete` excluyendo:
+- `public/uploads/` — fotos subidas por los alumnos
+- `db/*.db`, `db/*.db-shm`, `db/*.db-wal` — base de datos SQLite
+
+Las fotos y la base de datos **no se borran** en ninguna actualización.
 
 ## Pruebas rápidas
 
@@ -456,7 +519,8 @@ curl -b cookies.txt http://localhost:3000/admin/api/jobs
 
 ```bash
 curl -b cookies.txt -X POST http://localhost:3000/admin/api/alumnos/import \
-  -F "csv=@alumnos.csv"
+  --data-binary @alumnos.csv \
+  -H "Content-Type: text/plain"
 ```
 
 8. Override foto del mes (admin):
@@ -488,9 +552,13 @@ curl -X POST http://localhost:3000/like/1
 curl -N http://localhost:3000/events
 ```
 
-## Cambiar de impresora
+12. Descargar backup ZIP:
 
-El servidor usa **IPP Everywhere (driverless)**, por lo que cualquier impresora Brother moderna funciona sin instalar drivers adicionales.
+```bash
+curl -b cookies.txt -o backup.zip http://localhost:3000/admin/api/backup
+```
+
+## Cambiar de impresora
 
 La opción `[7]` del script automatiza todo el proceso:
 
@@ -524,6 +592,8 @@ sudo systemctl restart print-server
 - Al eliminar un job, el archivo físico se borra del disco y los registros de `print_log`, `likes` y `foto_del_mes` se eliminan antes de borrar el job.
 - La migración de columnas (`owner_token`, `mes_local`) se aplica automáticamente al arrancar si la DB ya existía.
 - Los cursos ya no son lista fija en el HTML: se gestionan desde el panel admin al cargar alumnos.
+- ImageMagick (`convert`) debe estar instalado en el servidor para los formatos 20×15 y 7×10. El formato "completo" no lo requiere.
+- El tema Sakura es el predeterminado para todos los usuarios que no hayan guardado preferencia. Se puede cambiar con el botón 🌸/🌙 en cualquier página.
 
 ---
 

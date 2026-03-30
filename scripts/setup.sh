@@ -414,7 +414,9 @@ HEOF2
     cat > /etc/dnsmasq.conf <<DMEOF
 # Print Server — dnsmasq (DHCP + portal cautivo)
 interface=${WIFI_IFACE}
-bind-interfaces
+# bind-dynamic: enlaza a la interfaz cuando esté disponible, en vez de fallar
+# si dnsmasq arranca antes de que hostapd levante la interfaz WiFi.
+bind-dynamic
 
 # DHCP: asigna IPs a los dispositivos conectados
 dhcp-range=${DHCP_START},${DHCP_END},255.255.255.0,8h
