@@ -377,9 +377,12 @@ driver=nl80211
 ssid=${SSID}
 hw_mode=g
 channel=7
-wmm_enabled=0
+ieee80211n=1
+wmm_enabled=1
 macaddr_acl=0
 ignore_broadcast_ssid=0
+country_code=CL
+ieee80211d=1
 HEOF
 
     if [[ "$OPEN_NETWORK" == "yes" ]]; then
