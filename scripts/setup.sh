@@ -176,11 +176,17 @@ deploy_server() {
         rsync -a --delete \
             --exclude=node_modules --exclude='.git' --exclude='*.log' \
             --exclude='.npm' \
+            --exclude='public/uploads' \
+            --exclude='db/*.db' \
+            --exclude='db/*.db-shm' \
+            --exclude='db/*.db-wal' \
             "$PROJECT_DIR/" "$INSTALL_DIR/"
     else
         find "$PROJECT_DIR" -mindepth 1 -maxdepth 1 \
             ! -name node_modules ! -name '.git' \
             -exec cp -r {} "$INSTALL_DIR/" \;
+        # Sin rsync: preservar manualmente uploads y DB
+        warn "rsync no disponible — uploads y DB no se sobreescriben pero verificar manualmente."
     fi
     chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
     usermod -aG lp "$SERVICE_USER"

@@ -4,7 +4,7 @@
   const DARK   = 'dark';
   const SAKURA = 'sakura';
 
-  function get()  { return localStorage.getItem(KEY) || DARK; }
+  function get()  { return localStorage.getItem(KEY) || SAKURA; }
   function save(t){ localStorage.setItem(KEY, t); }
 
   function apply(theme) {

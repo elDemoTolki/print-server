@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Panel Admin — Electivo de Fotografía y Multimedia</title>
   <link rel="stylesheet" href="/css/app.css" />
-  <script>if(localStorage.getItem('pf-theme')==='sakura')document.documentElement.classList.add('theme-sakura');</script>
+  <script>if((localStorage.getItem('pf-theme')||'sakura')==='sakura')document.documentElement.classList.add('theme-sakura');</script>
   <style>
     .admin-header {
       padding: 24px 0 16px;
@@ -423,6 +423,7 @@
         <label for="report-to">al</label>
         <input type="date" id="report-to" />
         <button class="btn btn-secondary" id="report-btn" style="height:38px;padding:0 18px;font-size:0.875rem">⬇ Exportar HTML</button>
+        <a href="/admin/api/backup" class="btn btn-secondary" id="backup-btn" style="height:38px;padding:0 18px;font-size:0.875rem;display:inline-flex;align-items:center;text-decoration:none">📦 Backup ZIP</a>
       </div>
 
       <!-- Desktop: table -->
@@ -988,8 +989,8 @@
       lbNext.disabled = idx === lbJobs.length - 1;
     }
 
-    function openLb(idx) {
-      lbJobs = getFiltered();   // usa los jobs filtrados actuales
+    function openLb(idx, jobsOverride) {
+      lbJobs = jobsOverride || getFiltered();
       lbPrev.style.display = lbNext.style.display = 'flex';
       showLbPhoto(idx);
       lb.classList.add('open');
@@ -1403,14 +1404,36 @@
     }
 
     function renderAudit() {
-      const filterVal  = (document.getElementById('audit-filter').value || '').toLowerCase();
+      const filterVal    = (document.getElementById('audit-filter').value || '').toLowerCase();
       const onlyMismatch = document.getElementById('audit-only-mismatch').checked;
       const tbody = document.getElementById('audit-body');
       const empty = document.getElementById('audit-empty');
 
+      // Paso 1: calcular cuántos tokens distintos usó cada alumno (por token_alumno_id o job_alumno)
+      const tokensPorAlumno = new Map(); // key: alumno_id (o "name:X" si no hay id)
+      allAuditRows.forEach(r => {
+        if (!r.owner_token) return;
+        const key = r.token_alumno_id != null ? `id:${r.token_alumno_id}` : `name:${r.job_alumno}`;
+        if (!tokensPorAlumno.has(key)) tokensPorAlumno.set(key, new Set());
+        tokensPorAlumno.get(key).add(r.owner_token);
+      });
+
+      function getFlags(r) {
+        const flags = [];
+        // Flag 1: nombre en el job ≠ nombre vinculado al token
+        if (r.owner_token && r.token_alumno_nombre && r.job_alumno !== r.token_alumno_nombre) {
+          flags.push('nombre');
+        }
+        // Flag 2: el alumno vinculado al token tiene más de un token distinto con fotos
+        if (r.owner_token) {
+          const key = r.token_alumno_id != null ? `id:${r.token_alumno_id}` : `name:${r.job_alumno}`;
+          if ((tokensPorAlumno.get(key)?.size ?? 0) > 1) flags.push('multi-token');
+        }
+        return flags;
+      }
+
       let rows = allAuditRows.filter(r => {
-        const mismatch = r.owner_token && r.token_alumno_nombre && r.job_alumno !== r.token_alumno_nombre;
-        if (onlyMismatch && !mismatch) return false;
+        if (onlyMismatch && getFlags(r).length === 0) return false;
         if (filterVal) {
           const hay = `${r.job_alumno} ${r.owner_token || ''} ${r.token_alumno_nombre || ''}`.toLowerCase();
           if (!hay.includes(filterVal)) return false;
@@ -1426,9 +1449,13 @@
       empty.classList.add('hidden');
 
       rows.forEach(r => {
-        const mismatch = r.owner_token && r.token_alumno_nombre && r.job_alumno !== r.token_alumno_nombre;
+        const flags = getFlags(r);
         const tr = document.createElement('tr');
-        if (mismatch) tr.className = 'mismatch';
+        if (flags.length) tr.className = 'mismatch';
+        const flagHtml = [
+          flags.includes('nombre')      ? '<span class="audit-flag">⚠ nombre distinto</span>' : '',
+          flags.includes('multi-token') ? '<span class="audit-flag" style="color:#a78bfa">⚠ 2+ dispositivos</span>' : '',
+        ].filter(Boolean).join(' ');
         tr.innerHTML = `
           <td><img class="audit-thumb" src="/uploads/${escHtml(r.filename)}" alt="" loading="lazy" /></td>
           <td class="text-muted">${r.id}</td>
@@ -1438,7 +1465,7 @@
           <td>${r.token_alumno_nombre
             ? `<strong>${escHtml(r.token_alumno_nombre)}</strong><br><span class="text-muted" style="font-size:0.75rem">${escHtml(r.token_alumno_curso || '')}</span>`
             : '<em style="color:var(--muted);font-size:0.78rem">sin vincular</em>'}</td>
-          <td>${mismatch ? '<span class="audit-flag">⚠ discrepancia</span>' : ''}</td>
+          <td>${flagHtml}</td>
         `;
         tbody.appendChild(tr);
       });

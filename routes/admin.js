@@ -1,6 +1,7 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const archiver = require('archiver');
 const bcrypt = require('bcrypt');
 const sharp = require('sharp');
 const config = require('../config');
@@ -252,6 +253,46 @@ router.get('/api/jobs', requireAdmin, (req, res) => {
 
 router.get('/api/audit', requireAdmin, (_req, res) => {
   res.json(db.getAuditJobs());
+});
+
+// ── Backup: descarga ZIP de todas las fotos organizadas por curso/alumno ──────
+router.get('/api/backup', requireAdmin, (_req, res) => {
+  const jobs = db.getAllJobs();
+  const date = new Date().toISOString().slice(0, 10);
+
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="backup-${date}.zip"`);
+
+  const archive = archiver('zip', { zlib: { level: 6 } });
+  archive.on('error', err => {
+    if (!res.headersSent) res.status(500).end();
+    else res.end();
+    console.error('Error generando backup:', err);
+  });
+  archive.pipe(res);
+
+  // Sanitizar nombre de carpeta (eliminar caracteres inválidos en paths)
+  const safe = s => String(s || 'Sin datos').replace(/[/\\:*?"<>|]/g, '_').trim() || '_';
+
+  // Contar archivos por ruta para detectar duplicados y numerar
+  const seen = new Map();
+  for (const job of jobs) {
+    const filePath = path.join(config.uploadDir, job.filename);
+    if (!fs.existsSync(filePath)) continue;
+
+    const curso  = safe(job.curso  || 'Sin Curso');
+    const alumno = safe(job.alumno || 'Sin Nombre');
+    const ext    = path.extname(job.original_name || job.filename) || '.jpg';
+    const base   = path.basename(job.original_name || job.filename, ext);
+    const key    = `${curso}/${alumno}/${base}${ext}`;
+    const count  = (seen.get(key) || 0) + 1;
+    seen.set(key, count);
+    const entryName = count === 1 ? key : `${curso}/${alumno}/${base}_${count}${ext}`;
+
+    archive.file(filePath, { name: entryName });
+  }
+
+  archive.finalize();
 });
 
 router.delete('/jobs/:id', requireAdmin, (req, res) => {

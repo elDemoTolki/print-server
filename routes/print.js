@@ -9,16 +9,20 @@ const { requireAdmin } = require('../middleware/auth');
 const { broadcast } = require('./events');
 
 // Dimensiones en píxeles a 300 DPI — orientación PORTRAIT (alto > ancho).
-// 15×20 cm → ancho: (150/25.4)×300 = 1772 px  alto: (200/25.4)×300 = 2362 px
-//  7×10 cm → ancho: ( 70/25.4)×300 =  827 px  alto: (100/25.4)×300 = 1181 px
-// El media CUPS debe coincidir exactamente con el papel cargado en la impresora.
-// Tamaños con redimensionado previo a 300 DPI — orientación portrait (alto > ancho).
+// 15×20 cm → foto: 1772×2362 px  — papel 15×20 cm → 425×567 pt
+// 10×18 cm → papel en impresora; foto 7×10 cm centrada en canvas 10×18 cm:
+//   foto: 827×1181 px  canvas: 1181×2126 px
 // page-width/page-height en puntos PostScript (1 pt = 25.4/72 mm):
-//   150 mm → 425 pt  |  200 mm → 567 pt
-//    70 mm → 198 pt  |  100 mm → 284 pt
+//   100 mm → 284 pt  |  150 mm → 425 pt  |  180 mm → 510 pt  |  200 mm → 567 pt
+//    70 mm → 198 pt
+//
+// w/h     = dimensiones del CANVAS que se envía a la impresora (debe coincidir con el papel)
+// photoW/H = dimensiones de la foto dentro del canvas (si difieren de w/h)
+// pw/ph   = página en PostScript points (igual que w/h pero en pt)
 const PRINT_SIZES = {
   '20x15': { w: 1772, h: 2362, pw: 425, ph: 567 },
-  '10x7':  { w:  827, h: 1181, pw: 198, ph: 284 },
+  // Papel 10×18 cm; foto 7×10 cm centrada con margen blanco
+  '10x7':  { w: 1181, h: 2126, photoW: 827, photoH: 1181, pw: 284, ph: 510 },
 };
 // 'full': sin redimensionado — la impresora escala al tamaño del papel cargado.
 
@@ -46,10 +50,14 @@ router.post('/:id', requireAdmin, (req, res) => {
 
     if (dims) {
       tempFile = path.join(os.tmpdir(), `print_${id}_${Date.now()}.jpg`);
-      // -auto-orient corrige la rotación EXIF; extent rellena con blanco si la
-      // proporción de la foto no coincide exactamente con el papel.
+      // -auto-orient corrige la rotación EXIF.
+      // Si photoW/photoH existen, la foto se redimensiona a ese tamaño y se centra
+      // sobre un canvas de dims.w×dims.h (= papel completo) con fondo blanco.
+      // Si no existen, el canvas coincide con el tamaño de la foto.
+      const photoW  = dims.photoW || dims.w;
+      const photoH  = dims.photoH || dims.h;
       execSync(
-        `convert "${filePath}" -auto-orient -resize ${dims.w}x${dims.h} -background white -gravity center -extent ${dims.w}x${dims.h} -units PixelsPerInch -density 300 "${tempFile}"`,
+        `convert "${filePath}" -auto-orient -resize ${photoW}x${photoH} -background white -gravity center -extent ${dims.w}x${dims.h} -units PixelsPerInch -density 300 "${tempFile}"`,
         { timeout: 30000 }
       );
       printPath = tempFile;
